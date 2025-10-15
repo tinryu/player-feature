@@ -1,0 +1,108 @@
+# ----------------------------
+# 🔹 FLUTTER & DART
+# ----------------------------
+.dart_tool/
+.packages
+.pub-cache/
+.buildlog/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-versions
+.svtools/
+installer.iss
+installer_output/
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.code-workspace
+
+# ----------------------------
+# 🔹 ANDROID
+# ----------------------------
+android/.gradle/
+android/captures/
+android/local.properties
+
+# ----------------------------
+# 🔹 IOS & MACOS
+# ----------------------------
+ios/Flutter/
+ios/Pods/
+ios/Runner.xcworkspace/
+ios/.symlinks/
+ios/.generated/
+ios/FlutterGeneratedPluginRegistrant.*
+macos/Flutter/ephemeral/
+macos/build/
+
+# ----------------------------
+# 🔹 WINDOWS & LINUX
+# ----------------------------
+windows/Flutter/ephemeral/
+windows/build/
+linux/Flutter/ephemeral/
+linux/build/
+
+# ----------------------------
+# 🔹 WEB
+# ----------------------------
+web/generated/
+web/.dart_tool/
+
+# ----------------------------
+# 🔹 XCODE
+# ----------------------------
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcworkspace
+xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+
+# ----------------------------
+# 🔹 FIREBASE
+# ----------------------------
+firebase-debug.log
+.firebase/
+.firebasehosting.*
+*.firebaserc
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# ----------------------------
+# 🔹 DOCKER
+# ----------------------------
+.dockerignore
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+**/tmp/
+**/.temp/
+**/logs/
+**/*.pid
+
+# ----------------------------
+# 🔹 SECRETS / ENV / LOGS
+# ----------------------------
+.env
+.env.*
+*.log
+*.swp
+
+# ----------------------------
+# 🔹 FASTLANE
+# ----------------------------
+fastlane/report.xml
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# ----------------------------
+# 🔹 MISC
+# ----------------------------
+pubspec.lock
+*.DS_Store
