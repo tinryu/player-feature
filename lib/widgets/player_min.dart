@@ -3,6 +3,7 @@ import 'package:playermusic1/screens/detail_screen.dart';
 import '../utils/helper.dart';
 import '../models/song.dart';
 import '../services/audio_service.dart';
+import '../services/equalizer_service.dart';
 
 class PlayerMinBar extends StatelessWidget {
   final bool isPlaying;
@@ -17,6 +18,7 @@ class PlayerMinBar extends StatelessWidget {
   final String songTitle;
   final Song? currentSong;
   final AudioService audioService;
+  final EqualizerService equalizerService;
 
   const PlayerMinBar({
     super.key,
@@ -31,6 +33,7 @@ class PlayerMinBar extends StatelessWidget {
     required this.onOpenFiles,
     required this.currentSong,
     required this.audioService,
+    required this.equalizerService,
     this.songTitle = 'No song selected',
   });
 
@@ -54,6 +57,7 @@ class PlayerMinBar extends StatelessWidget {
                 songTitle: songTitle,
                 artistName: currentSong?.artist ?? '',
                 audioService: audioService,
+                equalizerService: equalizerService,
                 animation: animation,
               );
             },
@@ -130,6 +134,50 @@ class PlayerMinBar extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.queue_music_rounded, color: Colors.white),
               onPressed: onOpenFiles,
+            ),
+            SizedBox(width: 5),
+            // Sleep timer countdown or equalizer icon
+            StreamBuilder<int>(
+              stream: audioService.sleepTimerStream,
+              builder: (context, snapshot) {
+                final minutesLeft = snapshot.data ?? 0;
+
+                if (minutesLeft > 0) {
+                  // Show countdown timer
+                  return Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.nightlight_round,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                        Text(
+                          '$minutesLeft',
+                          style: const TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  return Icon(
+                    Icons.timer_off_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  );
+                }
+              },
             ),
           ],
         ),

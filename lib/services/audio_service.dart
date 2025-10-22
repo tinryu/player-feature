@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
+import '../services/equalizer_service.dart';
 
 class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -11,12 +12,17 @@ class AudioService {
   int _currentIndex = -1;
   bool _isPlaying = false;
   bool _isRepeatEnabled = false;
-  final StreamController<bool> _isPlayingController = StreamController<bool>.broadcast();
-  
+  final StreamController<bool> _isPlayingController =
+      StreamController<bool>.broadcast();
+
+  // Equalizer service integration
+  EqualizerService? _equalizerService;
+
   // Sleep timer
   Timer? _sleepTimer;
   int _sleepTimerMinutes = 0;
-  final StreamController<int> _sleepTimerController = StreamController<int>.broadcast();
+  final StreamController<int> _sleepTimerController =
+      StreamController<int>.broadcast();
 
   // Stream controllers for state management
   final StreamController<List<Song>> _playlistController =
@@ -74,7 +80,7 @@ class AudioService {
 
   // Getter for current playing state
   bool get isPlaying => _isPlaying;
-  
+
   // Stream for playing state changes
   Stream<bool> get isPlayingStream => _isPlayingController.stream;
 
@@ -93,6 +99,12 @@ class AudioService {
 
     // Load cached playlist when service initializes
     loadCachedPlaylist();
+  }
+
+  // Set equalizer service reference
+  void setEqualizerService(EqualizerService equalizerService) {
+    _equalizerService = equalizerService;
+    _equalizerService?.setAudioPlayer(_audioPlayer);
   }
 
   // Save playlist to cache
@@ -186,8 +198,17 @@ class AudioService {
     addToPlaylist(newSongs);
   }
 
+  // Ensure the playlist is loaded from cache
+  Future<void> ensurePlaylistLoaded() async {
+    if (_playlist.isEmpty) {
+      await loadCachedPlaylist();
+    }
+  }
+
   // Get all songs in the playlist
-  List<Song> getSongs() {
+  Future<List<Song>> getSongs() async {
+    await ensurePlaylistLoaded();
+    print('Getting songs. Playlist length: ${_playlist.length}');
     return List.from(_playlist);
   }
 
@@ -200,6 +221,8 @@ class AudioService {
       _setCurrentIndex(index);
       await _playCurrentSong();
       _playlistController.add(List.from(_playlist));
+      _isPlaying = true;
+      _isPlayingController.add(_isPlaying);
     }
   }
 

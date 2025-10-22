@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:playermusic1/widgets/player_vertical.dart';
 import 'package:playermusic1/services/audio_service.dart';
+import 'package:playermusic1/services/equalizer_service.dart';
 import 'package:playermusic1/widgets/player_menu_bottom_sheet.dart';
 
 class DetailScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class DetailScreen extends StatefulWidget {
   final String songTitle;
   final String artistName;
   final AudioService audioService;
+  final EqualizerService equalizerService;
   final Animation<double> animation;
 
   const DetailScreen({
@@ -28,6 +30,7 @@ class DetailScreen extends StatefulWidget {
     required this.onShuffle,
     required this.onRepeat,
     required this.audioService,
+    required this.equalizerService,
     this.songTitle = 'No song selected',
     this.artistName = '',
     required this.animation,
@@ -42,8 +45,10 @@ class _DetailScreenState extends State<DetailScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          PlayerMenuBottomSheet(audioService: widget.audioService),
+      builder: (context) => PlayerMenuBottomSheet(
+        audioService: widget.audioService,
+        equalizerService: widget.equalizerService,
+      ),
     );
   }
 
@@ -97,84 +102,92 @@ class _DetailScreenState extends State<DetailScreen> {
           },
           child: Material(
             color: Colors.transparent,
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    IconButton(
-                      onPressed: _showMenuBottomSheet,
-                      icon: const Icon(Icons.more_horiz_rounded),
-                      color: Colors.white,
-                      iconSize: 28,
-                    ),
-                  ],
-                ),
-                // Add back button to collapse
-                GestureDetector(
-                  onVerticalDragEnd: (details) {
-                    if (details.primaryVelocity! > 0) {
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  child: Container(
-                    height: 40,
-                    alignment: Alignment.center,
+            child: SizedBox(
+              height: double.infinity,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        onPressed: _showMenuBottomSheet,
+                        icon: const Icon(Icons.more_horiz_rounded),
+                        color: Colors.white,
+                        iconSize: 28,
+                      ),
+                    ],
+                  ),
+                  // Add back button to collapse
+                  GestureDetector(
+                    onVerticalDragEnd: (details) {
+                      if (details.primaryVelocity! > 0) {
+                        Navigator.of(context).pop();
+                      }
+                    },
                     child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
+                      height: 40,
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                // Wrap PlayerVertical with StreamBuilder to listen to position/duration changes
-                StreamBuilder<Duration>(
-                  stream: widget.audioService.positionStream,
-                  builder: (context, positionSnapshot) {
-                    return StreamBuilder<Duration>(
-                      stream: widget.audioService.durationStream,
-                      builder: (context, durationSnapshot) {
-                        return StreamBuilder<bool>(
-                          stream: widget.audioService.isPlayingStream,
-                          builder: (context, isPlayingSnapshot) {
-                            return StreamBuilder(
-                              stream: widget.audioService.currentSongStream,
-                              builder: (context, songSnapshot) {
-                                final position =
-                                    positionSnapshot.data ?? widget.position;
-                                final duration =
-                                    durationSnapshot.data ?? widget.duration;
-                                final isPlaying =
-                                    isPlayingSnapshot.data ?? widget.isPlaying;
-                                final currentSong = songSnapshot.data;
+                  // Wrap PlayerVertical with StreamBuilder to listen to position/duration changes
+                  StreamBuilder<Duration>(
+                    stream: widget.audioService.positionStream,
+                    builder: (context, positionSnapshot) {
+                      return StreamBuilder<Duration>(
+                        stream: widget.audioService.durationStream,
+                        builder: (context, durationSnapshot) {
+                          return StreamBuilder<bool>(
+                            stream: widget.audioService.isPlayingStream,
+                            builder: (context, isPlayingSnapshot) {
+                              return StreamBuilder(
+                                stream: widget.audioService.currentSongStream,
+                                builder: (context, songSnapshot) {
+                                  final position =
+                                      positionSnapshot.data ?? widget.position;
+                                  final duration =
+                                      durationSnapshot.data ?? widget.duration;
+                                  final isPlaying =
+                                      isPlayingSnapshot.data ??
+                                      widget.isPlaying;
+                                  final currentSong = songSnapshot.data;
 
-                                return PlayerVertical(
-                                  isPlaying: isPlaying,
-                                  position: position,
-                                  duration: duration,
-                                  onPlayPause: widget.onPlayPause,
-                                  onPrevious: widget.onPrevious,
-                                  onNext: widget.onNext,
-                                  onShuffle: widget.onShuffle,
-                                  onRepeat: widget.onRepeat,
-                                  audioService: widget.audioService,
-                                  songTitle:
-                                      currentSong?.title ?? widget.songTitle,
-                                  artistName:
-                                      currentSong?.artist ?? widget.artistName,
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ],
+                                  return Expanded(
+                                    child: PlayerVertical(
+                                      isPlaying: isPlaying,
+                                      position: position,
+                                      duration: duration,
+                                      onPlayPause: widget.onPlayPause,
+                                      onPrevious: widget.onPrevious,
+                                      onNext: widget.onNext,
+                                      onShuffle: widget.onShuffle,
+                                      onRepeat: widget.onRepeat,
+                                      audioService: widget.audioService,
+                                      songTitle:
+                                          currentSong?.title ??
+                                          widget.songTitle,
+                                      artistName:
+                                          currentSong?.artist ??
+                                          widget.artistName,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),

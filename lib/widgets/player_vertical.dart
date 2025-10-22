@@ -36,30 +36,52 @@ class PlayerVertical extends StatefulWidget {
 }
 
 class _PlayerVerticalState extends State<PlayerVertical> {
-  // void _showSleepTimerDialog() {
-  //   showDialog(
-  //     context: context,
-  //     builder: (context) => SleepTimerDialog(
-  //       currentTimerMinutes: widget.audioService.sleepTimerMinutes,
-  //       onTimerSet: (minutes) {
-  //         widget.audioService.setSleepTimer(minutes);
-  //         if (mounted) {
-  //           setState(() {});
-  //         }
-  //       },
-  //     ),
-  //   );
-  // }
-
   Widget _buildControlButtons() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Shuffle button
-        IconButton(
-          icon: const Icon(Icons.shuffle, size: 22),
-          color: Colors.white,
-          onPressed: widget.onShuffle,
+        // Timer button
+        StreamBuilder<int>(
+          stream: widget.audioService.sleepTimerStream,
+          builder: (context, snapshot) {
+            final minutesLeft = snapshot.data ?? 0;
+
+            if (minutesLeft > 0) {
+              // Show countdown timer
+              return Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.nightlight_round,
+                      color: Colors.amber,
+                      size: 16,
+                    ),
+                    Text(
+                      '$minutesLeft',
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              return Icon(
+                Icons.timer_off_rounded,
+                color: Colors.white,
+                size: 20,
+              );
+            }
+          },
         ),
         const SizedBox(width: 12),
 
@@ -170,79 +192,64 @@ class _PlayerVerticalState extends State<PlayerVertical> {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Album art
-            Container(
-              width: 280,
-              height: 280,
-              margin: const EdgeInsets.symmetric(vertical: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.music_note,
-                size: 120,
-                color: Colors.grey,
-              ),
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Album art
+          Container(
+            width: 220,
+            height: 220,
+            margin: const EdgeInsets.symmetric(vertical: 20),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
-            const SizedBox(height: 40),
-            // Song title and sleep timer button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox(width: 40), // Spacer for centering
-                  Expanded(
-                    child: Text(
-                      Helper.getSongName(widget.songTitle),
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+            child: const Icon(
+              Icons.music_note_outlined,
+              size: 150,
+              color: Colors.redAccent,
+            ),
+          ),
+          const SizedBox(height: 30),
+          // Song title and sleep timer button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const SizedBox(width: 40), // Spacer for centering
+                Expanded(
+                  child: Text(
+                    Helper.getSongName(widget.songTitle),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  // StreamBuilder<int>(
-                  //   stream: widget.audioService.sleepTimerStream,
-                  //   initialData: widget.audioService.sleepTimerMinutes,
-                  //   builder: (context, snapshot) {
-                  //     final timerMinutes = snapshot.data ?? 0;
-                  //     return IconButton(
-                  //       icon: Icon(
-                  //         Icons.bedtime_outlined,
-                  //         color: timerMinutes > 0
-                  //             ? Colors.amber
-                  //             : Colors.white70,
-                  //         size: 28,
-                  //       ),
-                  //       onPressed: _showSleepTimerDialog,
-                  //       tooltip: timerMinutes > 0
-                  //           ? 'Sleep timer: $timerMinutes min'
-                  //           : 'Set sleep timer',
-                  //     );
-                  //   },
-                  // ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 40),
-            // Progress bar (optional)
-            _buildProgressBar(widget.position, widget.duration),
-            const SizedBox(height: 20),
-            // Player controls
-            _buildControlButtons(),
-          ],
-        ),
+          ),
+          const SizedBox(height: 40),
+          // Progress bar (optional)
+          _buildProgressBar(widget.position, widget.duration),
+          const SizedBox(height: 20),
+          // Player controls
+          _buildControlButtons(),
+        ],
       ),
     );
   }

@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import '../models/song.dart';
 import '../services/audio_service.dart';
+import '../utils/helper.dart';
 
 class SongListWidget extends StatelessWidget {
   final List<Song> songs;
@@ -15,18 +14,6 @@ class SongListWidget extends StatelessWidget {
     required this.audioService,
     required this.fadeAnimation,
   });
-
-  String _getSongName(String path) {
-    try {
-      String fileName = path.split(Platform.pathSeparator).last;
-      if (fileName.contains('.')) {
-        fileName = fileName.substring(0, fileName.lastIndexOf('.'));
-      }
-      return fileName;
-    } catch (e) {
-      return path;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +40,7 @@ class SongListWidget extends StatelessWidget {
                     )
                   : const Icon(Icons.music_note),
               title: Text(
-                _getSongName(song.title),
+                Helper.getSongName(song.title),
                 style: TextStyle(
                   fontWeight: isCurrentSong
                       ? FontWeight.bold

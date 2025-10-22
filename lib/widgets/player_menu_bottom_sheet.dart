@@ -1,105 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:playermusic1/services/audio_service.dart';
+import 'package:playermusic1/services/equalizer_service.dart';
 import 'package:playermusic1/widgets/sleep_timer_dialog.dart';
+import 'package:playermusic1/widgets/equalizer_dialog.dart';
 
 class PlayerMenuBottomSheet extends StatelessWidget {
   final AudioService audioService;
+  final EqualizerService equalizerService;
 
   const PlayerMenuBottomSheet({
     super.key,
     required this.audioService,
+    required this.equalizerService,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(20),
+    return SingleChildScrollView(
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Cancel button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Menu items
+            SizedBox(height: 16),
+            _buildMenuItem(
+              context,
+              icon: Icons.access_time_rounded,
+              title: 'Sleep Timer',
+              onTap: () {
+                Navigator.pop(context);
+                _showSleepTimer(context);
+              },
             ),
-          ),
-
-          // Menu items
-          _buildMenuItem(
-            context,
-            icon: Icons.access_time_rounded,
-            title: 'Sleep Timer',
-            onTap: () {
-              Navigator.pop(context);
-              _showSleepTimer(context);
-            },
-          ),
-          _buildMenuItem(
-            context,
-            icon: Icons.equalizer_rounded,
-            title: 'Equalizer',
-            onTap: () {
-              Navigator.pop(context);
-              _showComingSoon(context, 'Equalizer');
-            },
-          ),
-          _buildMenuItem(
-            context,
-            icon: Icons.playlist_add_rounded,
-            title: 'Add to Playlist',
-            onTap: () {
-              Navigator.pop(context);
-              _showComingSoon(context, 'Add to Playlist');
-            },
-          ),
-          _buildMenuItem(
-            context,
-            icon: Icons.info_outline_rounded,
-            title: 'Song Info',
-            onTap: () {
-              Navigator.pop(context);
-              _showSongInfo(context);
-            },
-          ),
-          _buildMenuItem(
-            context,
-            icon: Icons.notifications_outlined,
-            title: 'Set Ringtone',
-            onTap: () {
-              Navigator.pop(context);
-              _showComingSoon(context, 'Set Ringtone');
-            },
-          ),
-          _buildMenuItem(
-            context,
-            icon: Icons.share_outlined,
-            title: 'Share local file',
-            onTap: () {
-              Navigator.pop(context);
-              _showComingSoon(context, 'Share');
-            },
-          ),
-
-          const SizedBox(height: 20),
-        ],
+            _buildMenuItem(
+              context,
+              icon: Icons.equalizer_rounded,
+              title: 'Equalizer',
+              onTap: () {
+                Navigator.pop(context);
+                _showEqualizer(context);
+              },
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.info_outline_rounded,
+              title: 'Song Info',
+              onTap: () {
+                Navigator.pop(context);
+                _showSongInfo(context);
+              },
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -116,11 +73,7 @@ class PlayerMenuBottomSheet extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: Colors.white70,
-              size: 24,
-            ),
+            Icon(icon, color: Colors.white70, size: 24),
             const SizedBox(width: 20),
             Text(
               title,
@@ -154,10 +107,7 @@ class PlayerMenuBottomSheet extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text(
-          'Song Info',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Song Info', style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,10 +152,7 @@ class PlayerMenuBottomSheet extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -227,13 +174,20 @@ class PlayerMenuBottomSheet extends StatelessWidget {
     return '${twoDigits(minutes)}:${twoDigits(seconds)}';
   }
 
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature - Coming soon!'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: const Color(0xFF2D2D2D),
-      ),
+  void _showEqualizer(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => EqualizerDialog(equalizerService: equalizerService),
     );
   }
+
+  // void _showComingSoon(BuildContext context, String feature) {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(
+  //       content: Text('$feature - Coming soon!'),
+  //       duration: const Duration(seconds: 2),
+  //       backgroundColor: const Color(0xFF2D2D2D),
+  //     ),
+  //   );
+  // }
 }

@@ -6,6 +6,7 @@ import 'package:playermusic1/widgets/player_min.dart';
 import 'dart:async';
 import '../services/audio_service.dart';
 import '../services/audio_scanner_service.dart';
+import '../services/equalizer_service.dart';
 import '../models/song.dart';
 import '../models/audio_folder.dart';
 import '../widgets/song_list_widget.dart';
@@ -17,12 +18,20 @@ class PlaylistScreen extends StatefulWidget {
   const PlaylistScreen({super.key});
 
   @override
-  State<PlaylistScreen> createState() => _PlaylistScreenState();
+  PlaylistScreenState createState() => PlaylistScreenState();
 }
 
-class _PlaylistScreenState extends State<PlaylistScreen>
-    with TickerProviderStateMixin {
+/// Extension to access the PlaylistScreenState from the context
+extension PlaylistScreenStateExtension on BuildContext {
+  PlaylistScreenState? get playlistScreenState => 
+      findAncestorStateOfType<PlaylistScreenState>();
+}
+
+class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderStateMixin {
+
+  bool _sortAscending = true; // true for A-Z, false for Z-A
   late final AudioService _audioService;
+  late final EqualizerService _equalizerService;
   final AudioScannerService _audioScanner = AudioScannerService();
   late TabController _tabController;
   List<Song> _songs = [];
@@ -33,6 +42,26 @@ class _PlaylistScreenState extends State<PlaylistScreen>
   late AnimationController _playerBarAnimationController;
   late Animation<double> _playerBarAnimation;
   bool _isPlayerBarVisible = false;
+  bool get isPlayerBarVisible => _isPlayerBarVisible;
+  
+  void showPlayerBar() {
+    if (mounted) {
+      setState(() {
+        _isPlayerBarVisible = true;
+        if (!_playerBarAnimationController.isAnimating) {
+          _playerBarAnimationController.forward();
+        }
+      });
+    }
+  }
+  
+  void setCurrentSong(Song song) {
+    if (mounted) {
+      setState(() {
+        _currentSong = song;
+      });
+    }
+  }
   List<AudioFolder> _audioFolders = [];
   bool _isLoadingFolders = false;
 
@@ -48,6 +77,10 @@ class _PlaylistScreenState extends State<PlaylistScreen>
   void initState() {
     super.initState();
     _audioService = AudioService();
+    _equalizerService = EqualizerService();
+
+    // Connect equalizer service with audio service
+    _audioService.setEqualizerService(_equalizerService);
     _tabController = TabController(length: 4, vsync: this);
 
     // Initialize equalizer icon animation
@@ -123,7 +156,9 @@ class _PlaylistScreenState extends State<PlaylistScreen>
 
   Future<void> _requestPermissionsAndLoad() async {
     // Request storage permission on app start
-    final hasPermission = await PermissionHelper.requestStoragePermission(context);
+    final hasPermission = await PermissionHelper.requestStoragePermission(
+      context,
+    );
     if (hasPermission) {
       // Load existing songs
       await _loadSongs();
@@ -144,10 +179,13 @@ class _PlaylistScreenState extends State<PlaylistScreen>
       // First load any cached songs
       await _audioService.loadCachedPlaylist();
 
-      // Then update the UI with the loaded songs
+      // Get the songs asynchronously
+      final songs = await _audioService.getSongs();
+
+      // Update the UI with the loaded songs
       if (mounted) {
         setState(() {
-          _songs = _audioService.getSongs();
+          _songs = songs;
         });
       }
 
@@ -164,7 +202,9 @@ class _PlaylistScreenState extends State<PlaylistScreen>
 
   Future<void> _scanForAudioFiles() async {
     // Check permission before scanning
-    final hasPermission = await PermissionHelper.requestStoragePermission(context);
+    final hasPermission = await PermissionHelper.requestStoragePermission(
+      context,
+    );
     if (!hasPermission) {
       return;
     }
@@ -175,7 +215,7 @@ class _PlaylistScreenState extends State<PlaylistScreen>
         _audioService.addSongs(files);
         if (mounted) {
           setState(() {
-            _songs = _audioService.getSongs();
+            _songs = _audioService.getSongs() as List<Song>;
           });
         }
       }
@@ -200,7 +240,7 @@ class _PlaylistScreenState extends State<PlaylistScreen>
         _audioService.addSongs(files);
         if (mounted) {
           setState(() {
-            _songs = _audioService.getSongs();
+            _songs = _audioService.getSongs() as List<Song>;
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -251,7 +291,9 @@ class _PlaylistScreenState extends State<PlaylistScreen>
 
   Future<void> _scanForFolders() async {
     // Check permission before scanning
-    final hasPermission = await PermissionHelper.requestStoragePermission(context);
+    final hasPermission = await PermissionHelper.requestStoragePermission(
+      context,
+    );
     if (!hasPermission) {
       return;
     }
@@ -293,7 +335,7 @@ class _PlaylistScreenState extends State<PlaylistScreen>
         _audioService.addSongs(files);
         if (mounted) {
           setState(() {
-            _songs = _audioService.getSongs();
+            _songs = _audioService.getSongs() as List<Song>;
           });
           Helper.showSnackBar(
             context,
@@ -311,29 +353,6 @@ class _PlaylistScreenState extends State<PlaylistScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Music Player'),
-        toolbarHeight: 50,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.more_vert),
-          onPressed: () => {},
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.clear_all),
-            tooltip: 'Clear Cache',
-            onPressed: _showClearCacheDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.info),
-            tooltip: 'Music Player v1.0.0',
-            onPressed: () => {},
-          ),
-        ],
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
-      ),
       body: Stack(
         children: [
           Column(
@@ -348,10 +367,10 @@ class _PlaylistScreenState extends State<PlaylistScreen>
                 child: TabBar(
                   tabAlignment: TabAlignment.fill,
                   controller: _tabController,
-                  labelColor: Colors.black,
+                  labelColor: Theme.of(context).colorScheme.onSurface,
                   labelPadding: EdgeInsets.zero,
                   unselectedLabelColor: Colors.grey.shade600,
-                  indicatorColor: Colors.black,
+                  indicatorColor: Theme.of(context).colorScheme.onSurface,
                   indicatorPadding: EdgeInsets.zero,
                   tabs: const [
                     Tab(text: 'Playlist'),
@@ -368,10 +387,162 @@ class _PlaylistScreenState extends State<PlaylistScreen>
                     // Playlist Tab
                     _songs.isEmpty
                         ? const Center(child: Text('No songs in playlist'))
-                        : SongListWidget(
-                            songs: _songs,
-                            audioService: _audioService,
-                            fadeAnimation: _fadeAnimation,
+                        : Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 0,
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Theme.of(
+                                          context,
+                                        ).dividerColor.withValues(alpha: 0.5),
+                                        width: 1,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      TextButton.icon(
+                                        onPressed: _songs.isNotEmpty
+                                            ? () {
+                                                _audioService.shuffle();
+                                                setState(() {
+                                                  _songs =
+                                                      _audioService.getSongs()
+                                                          as List<Song>;
+                                                });
+                                              }
+                                            : null,
+                                        icon: Icon(
+                                          Icons.play_circle_fill_rounded,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
+                                        ),
+                                        label: Text(
+                                          'Shuffle',
+                                          style: TextStyle(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                      PopupMenuButton<String>(
+                                        elevation: 2,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        menuPadding: EdgeInsets.all(5),
+                                        itemBuilder: (context) => [
+                                          PopupMenuItem(
+                                            value: 'clear_cache',
+                                            height:
+                                                40, // Fixed height for consistent item size
+                                            onTap: _showClearCacheDialog,
+                                            child: SizedBox(
+                                              width: double
+                                                  .infinity, // Make the item take full width
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.delete_sweep_rounded,
+                                                    size: 20,
+                                                    color: Colors.black87,
+                                                  ),
+                                                  const SizedBox(
+                                                    width: 12,
+                                                  ), // Space between icon and text
+                                                  Text(
+                                                    'Clear Playlists',
+                                                    style: TextStyle(
+                                                      color: Colors.black87,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const PopupMenuDivider(
+                                            thickness: 0.3,
+                                            height: 0.5,
+                                            color: Colors.grey,
+                                          ), // Divider between items
+                                          PopupMenuItem(
+                                            value: 'sort',
+                                            height:
+                                                40, // Same height as other items
+                                            child: SizedBox(
+                                              width:
+                                                  double.infinity, // Full width
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.swap_vert_rounded,
+                                                    size: 20,
+                                                    color: Colors.black87,
+                                                  ),
+                                                  const SizedBox(
+                                                    width: 12,
+                                                  ), // Space between icon and text
+                                                  Text(
+                                                    _sortAscending
+                                                        ? 'A → Z'
+                                                        : 'Z → A',
+                                                    style: TextStyle(
+                                                      color: Colors.black87,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                _songs.sort((a, b) {
+                                                  final comparison = a.title
+                                                      .toLowerCase()
+                                                      .compareTo(
+                                                        b.title.toLowerCase(),
+                                                      );
+                                                  return _sortAscending
+                                                      ? comparison
+                                                      : -comparison;
+                                                });
+                                                _sortAscending =
+                                                    !_sortAscending;
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                        icon: Icon(Icons.menu_rounded),
+                                        iconSize: 24,
+                                        position: PopupMenuPosition.under,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              Expanded(
+                                child: SongListWidget(
+                                  songs: _songs,
+                                  audioService: _audioService,
+                                  fadeAnimation: _fadeAnimation,
+                                ),
+                              ),
+                            ],
                           ),
                     // Tracks Tab
                     _songs.isEmpty
@@ -544,6 +715,7 @@ class _PlaylistScreenState extends State<PlaylistScreen>
                                     _currentSong?.title ?? 'No song selected',
                                 currentSong: _currentSong,
                                 audioService: _audioService,
+                                equalizerService: _equalizerService,
                               );
                             },
                           );
@@ -554,21 +726,6 @@ class _PlaylistScreenState extends State<PlaylistScreen>
                 ),
               ),
             ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        selectedItemColor: Colors.black,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_music_rounded),
-            label: 'My Music',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.cloud_rounded),
-            label: 'Online',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
         ],
       ),
     );

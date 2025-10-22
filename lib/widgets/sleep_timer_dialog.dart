@@ -16,7 +16,7 @@ class SleepTimerDialog extends StatefulWidget {
 
 class _SleepTimerDialogState extends State<SleepTimerDialog> {
   double _sliderValue = 0;
-  final List<int> _timerOptions = [0, 15, 30, 60, 90];
+  final List<int> _timerOptions = [0, 5, 30, 60, 90, 120];
 
   @override
   void initState() {
