@@ -40,12 +40,19 @@ dependencies:
   permission_handler: ^12.0.0
   shared_preferences: ^2.2.2
   path_provider: ^2.1.2
+  path: ^1.8.3
   provider: ^6.1.1
+  video_player: ^2.8.1
+  chewie: ^1.7.4
+  wakelock_plus: ^1.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.13.1
+  mockito: ^5.4.4
+  build_runner: ^2.4.7
+  test: ^1.24.8
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

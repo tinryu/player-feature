@@ -1,20 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:playermusic1/utils/helper.dart';
 import '../models/song.dart';
+import '../providers/song_provider.dart';
 import '../services/audio_service.dart';
 
 class SearchScreen extends StatefulWidget {
-  final List<Song> allSongs;
-  final AudioService audioService;
-  final Function(Song) onSongSelected;
-
-  const SearchScreen({
-    super.key,
-    required this.allSongs,
-    required this.audioService,
-    required this.onSongSelected,
-  });
+  const SearchScreen({super.key});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -26,6 +19,18 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Song> _searchResults = [];
   Timer? _debounce;
   bool _isSearching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load songs if not already loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final songProvider = context.read<SongProvider>();
+      if (songProvider.songs.isEmpty) {
+        songProvider.loadSongs();
+      }
+    });
+  }
 
   void _performSearch(String query) {
     // Cancel any previous debounce timer
@@ -47,15 +52,9 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounce = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
 
-      final queryLower = query.toLowerCase();
-
-      // Filter songs based on the search query
+      final songProvider = context.read<SongProvider>();
       setState(() {
-        _searchResults = widget.allSongs.where((song) {
-          return song.title.toLowerCase().contains(queryLower) ||
-              song.artist.toLowerCase().contains(queryLower) ||
-              (song.album.toLowerCase().contains(queryLower));
-        }).toList();
+        _searchResults = songProvider.searchSongs(query);
         _isSearching = false;
       });
     });
@@ -271,25 +270,32 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
             ],
           ),
-          trailing: widget.audioService.currentSong?.path == song.path
-              ? Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.equalizer_rounded,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                )
-              : null,
-          onTap: () {
-            widget.onSongSelected(song);
-          },
+          isThreeLine: false,
+          dense: true,
+          trailing: Builder(
+            builder: (context) {
+              final isCurrentSong = context.select<AudioService, bool>(
+                (audioService) => audioService.currentSong?.path == song.path,
+              );
+
+              if (!isCurrentSong) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.equalizer_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              );
+            },
+          ),
         );
       },
     );

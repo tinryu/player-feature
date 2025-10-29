@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:playermusic1/screens/home_screen.dart';
 import 'package:playermusic1/providers/theme_provider.dart';
+import 'package:playermusic1/providers/song_provider.dart';
+import 'package:playermusic1/providers/audio_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,8 +16,18 @@ void main() {
   });
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (context) => AudioProvider()),
+        ChangeNotifierProxyProvider<AudioProvider, SongProvider>(
+          create: (context) => SongProvider(
+            audioProvider: Provider.of<AudioProvider>(context, listen: false),
+          ),
+          update: (context, audioProvider, previous) => 
+              previous ?? SongProvider(audioProvider: audioProvider),
+        ),
+      ],
       child: const MyApp(),
     ),
   );
@@ -27,15 +39,23 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    
+
     return MaterialApp(
       title: 'Music Player',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.light),
+        primaryColor: Colors.black,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey, brightness: Brightness.dark),
+        primaryColor: Colors.white,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blueGrey,
+          brightness: Brightness.dark,
+        ),
         useMaterial3: true,
       ),
       themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,

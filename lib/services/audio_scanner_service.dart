@@ -47,7 +47,7 @@ class AudioScannerService {
   }
 
   /// Gets cached files if available and valid
-  Future<List<File>?> _getCachedFiles() async {
+  Future<List<File>?> getCachedFiles() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final directoryPath = prefs.getString(_cachedDirKey);
@@ -101,61 +101,148 @@ class AudioScannerService {
   /// Scans the device for audio files
   Future<List<File>> scanForAudioFiles() async {
     try {
+      if (kDebugMode) {
+        print('Starting audio file scan...');
+      }
+
       // Check cache first
       final isCacheValid = await _isCacheValid();
       if (isCacheValid) {
-        final cachedFiles = await _getCachedFiles();
+        if (kDebugMode) {
+          print('Checking cache for audio files...');
+        }
+        final cachedFiles = await getCachedFiles();
         if (cachedFiles != null && cachedFiles.isNotEmpty) {
+          if (kDebugMode) {
+            print('Found ${cachedFiles.length} cached audio files');
+          }
           return cachedFiles;
         }
       }
 
       // Request storage permission
+      if (kDebugMode) {
+        print('Requesting storage permission...');
+      }
       final hasPermission = await _requestStoragePermission();
-      if (hasPermission) {
-        // Let user select a directory to scan
-        final directoryPath = await FilePicker.platform.getDirectoryPath();
-        if (directoryPath != null) {
-          final files = await _findAudioFiles(Directory(directoryPath));
-          // Save to cache
-          await _saveToCache(directoryPath, files);
-          return files;
-        }
-      } else {
+
+      if (!hasPermission) {
         throw Exception(
           'Storage permission is required to scan for audio files',
         );
       }
+
+      if (kDebugMode) {
+        print('Permission granted, opening directory picker...');
+      }
+
+      // Let user select a directory to scan
+      final directoryPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select folder with music',
+      );
+
+      if (directoryPath == null) {
+        if (kDebugMode) {
+          print('No directory selected');
+        }
+        return [];
+      }
+
+      if (kDebugMode) {
+        print('Scanning directory: $directoryPath');
+      }
+
+      final directory = Directory(directoryPath);
+      if (!await directory.exists()) {
+        throw Exception('Selected directory does not exist');
+      }
+
+      final files = await _findAudioFiles(directory);
+
+      if (kDebugMode) {
+        print('Found ${files.length} audio files');
+      }
+
+      // Save to cache
+      await _saveToCache(directoryPath, files);
+      return files;
     } catch (e) {
       if (kDebugMode) {
-        print('Error scanning for audio files: $e');
+        print('Error in scanForAudioFiles: $e');
+        print('Error type: ${e.runtimeType}');
+        if (e is Error) {
+          print('Stack trace: ${e.stackTrace}');
+        }
       }
       rethrow;
     }
-    return [];
   }
 
   /// Recursively finds audio files in a directory
   Future<List<File>> _findAudioFiles(Directory directory) async {
     final List<File> audioFiles = [];
+    int fileCount = 0;
+    int audioFileCount = 0;
+
+    if (kDebugMode) {
+      print('Scanning directory: ${directory.path}');
+    }
+
     try {
       await for (var entity in directory.list(recursive: true)) {
-        if (entity is File) {
-          final path = entity.path.toLowerCase();
-          if (path.endsWith('.mp3') ||
-              path.endsWith('.wav') ||
-              path.endsWith('.m4a') ||
-              path.endsWith('.aac') ||
-              path.endsWith('.ogg')) {
-            audioFiles.add(entity);
+        try {
+          fileCount++;
+          if (fileCount % 100 == 0 && kDebugMode) {
+            print(
+              'Scanned $fileCount files, found $audioFileCount audio files so far...',
+            );
           }
+
+          if (entity is File) {
+            final path = entity.path.toLowerCase();
+            if (path.endsWith('.mp3') ||
+                path.endsWith('.wav') ||
+                path.endsWith('.m4a') ||
+                path.endsWith('.aac') ||
+                path.endsWith('.flac') ||
+                path.endsWith('.ogg')) {
+              audioFiles.add(entity);
+              audioFileCount++;
+
+              if (kDebugMode && audioFileCount <= 5) {
+                print('Found audio file: ${entity.path}');
+              }
+            }
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('Error processing file ${entity.path}: $e');
+          }
+          continue;
+        }
+      }
+
+      if (kDebugMode) {
+        print(
+          'Scan complete. Scanned $fileCount files, found $audioFileCount audio files.',
+        );
+        if (audioFileCount == 0) {
+          print(
+            'No audio files found. Make sure you have music files in the selected directory.',
+          );
+          print('Supported formats: .mp3, .wav, .m4a, .aac, .flac, .ogg');
         }
       }
     } catch (e) {
       if (kDebugMode) {
         print('Error scanning directory ${directory.path}: $e');
+        if (e is Error) {
+          print('Stack trace: ${e.stackTrace}');
+        }
       }
+      rethrow;
     }
+
     return audioFiles;
   }
 
@@ -198,7 +285,7 @@ class AudioScannerService {
       }
 
       final List<AudioFolder> allFolders = [];
-      
+
       // Common music directories to scan
       final List<String> commonPaths = [
         Platform.environment['USERPROFILE'] ?? '',
@@ -239,7 +326,7 @@ class AudioScannerService {
 
       final result = uniqueFolders.values.toList();
       result.sort((a, b) => b.songCount.compareTo(a.songCount));
-      
+
       return result;
     } catch (e) {
       if (kDebugMode) {
@@ -252,7 +339,7 @@ class AudioScannerService {
   /// Finds folders containing audio files
   Future<List<AudioFolder>> _findAudioFolders(Directory directory) async {
     final Map<String, int> folderSongCount = {};
-    
+
     try {
       await for (var entity in directory.list(recursive: true)) {
         if (entity is File) {
@@ -264,7 +351,8 @@ class AudioScannerService {
               path.endsWith('.ogg')) {
             // Get the parent directory of the audio file
             final parentPath = entity.parent.path;
-            folderSongCount[parentPath] = (folderSongCount[parentPath] ?? 0) + 1;
+            folderSongCount[parentPath] =
+                (folderSongCount[parentPath] ?? 0) + 1;
           }
         }
       }

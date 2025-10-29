@@ -1,97 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:playermusic1/utils/helper.dart';
-import 'package:playermusic1/services/audio_service.dart';
+import 'package:playermusic1/providers/audio_provider.dart';
 // import 'package:playermusic1/widgets/sleep_timer_dialog.dart';
 
-class PlayerVertical extends StatefulWidget {
-  final bool isPlaying;
+class PlayerVertical extends StatelessWidget {
   final Duration position;
   final Duration duration;
-  final Function() onPlayPause;
-  final Function() onPrevious;
-  final Function() onNext;
-  final Function() onShuffle;
-  final Function() onRepeat;
-  final String songTitle;
-  final String artistName;
-  final AudioService audioService;
+  final AudioProvider audioProvider;
 
   const PlayerVertical({
     super.key,
-    required this.isPlaying,
     required this.position,
     required this.duration,
-    required this.onPlayPause,
-    required this.onPrevious,
-    required this.onNext,
-    required this.onShuffle,
-    required this.onRepeat,
-    required this.audioService,
-    this.songTitle = 'No song selected',
-    this.artistName = '',
+    required this.audioProvider,
   });
 
-  @override
-  State<PlayerVertical> createState() => _PlayerVerticalState();
-}
-
-class _PlayerVerticalState extends State<PlayerVertical> {
   Widget _buildControlButtons() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Timer button
-        StreamBuilder<int>(
-          stream: widget.audioService.sleepTimerStream,
-          builder: (context, snapshot) {
-            final minutesLeft = snapshot.data ?? 0;
-
-            if (minutesLeft > 0) {
-              // Show countdown timer
-              return Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.nightlight_round,
-                      color: Colors.amber,
-                      size: 16,
+        // Repeat button with state
+        IconButton(
+          icon: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Main icon
+              Icon(
+                audioProvider.repeatMode == 0 ? Icons.repeat : Icons.repeat_one,
+                size: 20,
+                color: audioProvider.repeatMode > 0
+                    ? Colors
+                          .white // Highlight when repeat is active
+                    : Colors.grey.shade500,
+              ),
+              // Small indicator for repeat one
+              if (audioProvider.repeatMode == 1)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(1),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
                     ),
-                    Text(
-                      '$minutesLeft',
-                      style: const TextStyle(
-                        color: Colors.amber,
+                    child: const Text(
+                      '1',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        height: 1,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              );
-            } else {
-              return Icon(
-                Icons.timer_off_rounded,
-                color: Colors.white,
-                size: 20,
-              );
-            }
-          },
+            ],
+          ),
+          onPressed: audioProvider.toggleRepeat,
+          tooltip: audioProvider.repeatMode == 0
+              ? 'No repeat'
+              : audioProvider.repeatMode == 1
+              ? 'Repeat one'
+              : 'Repeat all',
         ),
-        const SizedBox(width: 12),
-
         // Previous button
         IconButton(
-          icon: const Icon(Icons.skip_previous_rounded, size: 30),
+          icon: const Icon(Icons.skip_previous_rounded, size: 25),
           color: Colors.white,
-          onPressed: widget.onPrevious,
+          onPressed: audioProvider.previous,
         ),
-        const SizedBox(width: 12),
 
         // Play/Pause button
         Container(
@@ -101,29 +79,33 @@ class _PlayerVerticalState extends State<PlayerVertical> {
           ),
           child: IconButton(
             icon: Icon(
-              widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              audioProvider.isPlaying
+                  ? Icons.pause_rounded
+                  : Icons.play_arrow_rounded,
               size: 30,
               color: Colors.white,
             ),
-            onPressed: widget.onPlayPause,
+            onPressed: audioProvider.togglePlayPause,
             padding: const EdgeInsets.all(12),
           ),
         ),
-        const SizedBox(width: 12),
 
         // Next button
         IconButton(
-          icon: const Icon(Icons.skip_next_rounded, size: 30),
+          icon: const Icon(Icons.skip_next_rounded, size: 25),
           color: Colors.white,
-          onPressed: widget.onNext,
+          onPressed: audioProvider.next,
         ),
-        const SizedBox(width: 12),
-
-        // Repeat button
+        // Mute button
         IconButton(
-          icon: const Icon(Icons.repeat, size: 22),
-          color: Colors.white,
-          onPressed: widget.onRepeat,
+          icon: Icon(
+            audioProvider.isMuted
+                ? Icons.volume_off_rounded
+                : Icons.volume_up_rounded,
+            size: 20,
+            color: !audioProvider.isMuted ? Colors.grey.shade500 : Colors.white,
+          ),
+          onPressed: audioProvider.toggleMute,
         ),
       ],
     );
@@ -158,9 +140,7 @@ class _PlayerVerticalState extends State<PlayerVertical> {
               max: safeDuration.inMilliseconds.toDouble(),
               onChanged: (value) {
                 if (safeDuration.inMilliseconds > 0) {
-                  widget.audioService.seek(
-                    Duration(milliseconds: value.toInt()),
-                  );
+                  audioProvider.seek(Duration(milliseconds: value.toInt()));
                 }
               },
             ),
@@ -219,33 +199,75 @@ class _PlayerVerticalState extends State<PlayerVertical> {
               color: Colors.redAccent,
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           // Song title and sleep timer button
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const SizedBox(width: 40), // Spacer for centering
-                Expanded(
-                  child: Text(
-                    Helper.getSongName(widget.songTitle),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  Helper.getSongName(audioProvider.currentSong?.title ?? ''),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Timer button
+              StreamBuilder<int>(
+                stream: audioProvider.sleepTimerStream,
+                builder: (context, snapshot) {
+                  final minutesLeft = snapshot.data ?? 0;
+
+                  if (minutesLeft > 0) {
+                    // Show countdown timer
+                    return Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.nightlight_round,
+                            color: Colors.amber,
+                            size: 16,
+                          ),
+                          Text(
+                            '$minutesLeft',
+                            style: const TextStyle(
+                              color: Colors.amber,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else {
+                    return const SizedBox.shrink();
+                  }
+                },
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+          const SizedBox(height: 20),
           // Progress bar (optional)
-          _buildProgressBar(widget.position, widget.duration),
+          _buildProgressBar(position, duration),
           const SizedBox(height: 20),
           // Player controls
           _buildControlButtons(),

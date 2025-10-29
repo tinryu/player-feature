@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/song.dart';
+import 'package:provider/provider.dart';
 import '../screens/playlist_screen.dart';
 import '../screens/search_screen.dart';
 import '../screens/settings_screen.dart';
-import '../services/audio_service.dart';
+import '../screens/video_screen.dart';
+import '../providers/song_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,67 +19,28 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<PlaylistScreenState> _playlistScreenKey =
       GlobalKey<PlaylistScreenState>();
 
-  late final AudioService _audioService;
-  List<Song> _allSongs = [];
-
   @override
   void initState() {
     super.initState();
-    _audioService = AudioService();
-    // Initialize services and load songs
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      _loadSongs();
+    // Load songs if not already loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final songProvider = context.read<SongProvider>();
+      if (songProvider.songs.isEmpty) {
+        songProvider.loadSongs();
+      }
     });
   }
 
-  Future<void> _loadSongs() async {
-    try {
-      print('Loading songs...');
-      final songs = await _audioService.getSongs();
-      print('Songs loaded: ${songs.length}');
-      if (mounted) {
-        setState(() {
-          _allSongs = songs;
-          print('_allSongs updated with ${_allSongs.length} songs');
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load songs: $e')));
-      }
-    }
-  }
-
   List<Widget> _buildPages() {
-    print('_buildPages called. _allSongs length: ${_allSongs.length}');
+    final songProvider = context.watch<SongProvider>();
 
-    final searchPage = _allSongs.isEmpty
+    final searchPage = songProvider.isLoading
         ? const Center(child: CircularProgressIndicator())
-        : SearchScreen(
-            key: ValueKey('search_page_${_allSongs.length}'),
-            allSongs: _allSongs,
-            audioService: _audioService,
-            onSongSelected: (song) async {
-              // Switch to home tab (index 0) before playing song
-              if (_selectedIndex != 0) {
-                _onItemTapped(0);
-              }
-              // Wait for the tab switch to complete
-              await Future.delayed(const Duration(milliseconds: 100));
-
-              // Update the current song in PlaylistScreenState
-              _playlistScreenKey.currentState?.setCurrentSong(song);
-
-              // Show the player bar using the exposed method
-              _playlistScreenKey.currentState?.showPlayerBar();
-            },
-          );
+        : SearchScreen(key: const ValueKey('search_page'));
 
     return [
       PlaylistScreen(key: _playlistScreenKey),
-      const Center(child: Text('Online Music')),
+      const VideoScreen(),
       searchPage,
     ];
   }

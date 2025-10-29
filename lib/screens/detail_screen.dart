@@ -1,90 +1,51 @@
 import 'package:flutter/material.dart';
-import 'package:playermusic1/widgets/player_vertical.dart';
-import 'package:playermusic1/services/audio_service.dart';
 import 'package:playermusic1/services/equalizer_service.dart';
+import 'package:playermusic1/widgets/player_vertical.dart';
+import 'package:provider/provider.dart';
+import 'package:playermusic1/providers/audio_provider.dart';
 import 'package:playermusic1/widgets/player_menu_bottom_sheet.dart';
 
-class DetailScreen extends StatefulWidget {
-  final bool isPlaying;
-  final Duration position;
-  final Duration duration;
-  final Function() onPlayPause;
-  final Function() onPrevious;
-  final Function() onNext;
-  final Function() onShuffle;
-  final Function() onRepeat;
-  final String songTitle;
-  final String artistName;
-  final AudioService audioService;
-  final EqualizerService equalizerService;
+class DetailScreen extends StatelessWidget {
   final Animation<double> animation;
-
+  final EqualizerService equalizerService;
   const DetailScreen({
     super.key,
-    required this.isPlaying,
-    required this.position,
-    required this.duration,
-    required this.onPlayPause,
-    required this.onPrevious,
-    required this.onNext,
-    required this.onShuffle,
-    required this.onRepeat,
-    required this.audioService,
-    required this.equalizerService,
-    this.songTitle = 'No song selected',
-    this.artistName = '',
     required this.animation,
+    required this.equalizerService,
   });
-
-  @override
-  State<DetailScreen> createState() => _DetailScreenState();
-}
-
-class _DetailScreenState extends State<DetailScreen> {
-  void _showMenuBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => PlayerMenuBottomSheet(
-        audioService: widget.audioService,
-        equalizerService: widget.equalizerService,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final audioProvider = Provider.of<AudioProvider>(context);
+    void showMenuBottomSheet(BuildContext context) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (context) => PlayerMenuBottomSheet(
+          audioProvider: audioProvider,
+          equalizerService: equalizerService,
+        ),
+      );
+    }
+
     return Stack(
       children: [
         AnimatedBuilder(
-          animation: widget.animation,
+          animation: animation,
           builder: (context, child) {
             return Positioned(
-              bottom: Tween<double>(
-                begin: 0,
-                end: 0,
-              ).animate(widget.animation).value,
-              left: Tween<double>(
-                begin: 8,
-                end: 0,
-              ).animate(widget.animation).value,
-              right: Tween<double>(
-                begin: 8,
-                end: 0,
-              ).animate(widget.animation).value,
+              bottom: Tween<double>(begin: 0, end: 0).animate(animation).value,
+              left: Tween<double>(begin: 8, end: 0).animate(animation).value,
+              right: Tween<double>(begin: 8, end: 0).animate(animation).value,
               top: Tween<double>(
                 begin: MediaQuery.of(context).size.height - 80,
                 end: 0,
-              ).animate(widget.animation).value,
+              ).animate(animation).value,
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.redAccent,
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(
-                      Tween<double>(
-                        begin: 12,
-                        end: 0,
-                      ).animate(widget.animation).value,
+                      Tween<double>(begin: 12, end: 0).animate(animation).value,
                     ),
                   ),
                   boxShadow: [
@@ -106,18 +67,6 @@ class _DetailScreenState extends State<DetailScreen> {
               height: double.infinity,
               child: Column(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        onPressed: _showMenuBottomSheet,
-                        icon: const Icon(Icons.more_horiz_rounded),
-                        color: Colors.white,
-                        iconSize: 28,
-                      ),
-                    ],
-                  ),
-                  // Add back button to collapse
                   GestureDetector(
                     onVerticalDragEnd: (details) {
                       if (details.primaryVelocity! > 0) {
@@ -137,50 +86,49 @@ class _DetailScreenState extends State<DetailScreen> {
                       ),
                     ),
                   ),
-                  // Wrap PlayerVertical with StreamBuilder to listen to position/duration changes
+                  //     // Player controls
                   StreamBuilder<Duration>(
-                    stream: widget.audioService.positionStream,
+                    stream: audioProvider.positionStream,
                     builder: (context, positionSnapshot) {
                       return StreamBuilder<Duration>(
-                        stream: widget.audioService.durationStream,
+                        stream: audioProvider.durationStream,
                         builder: (context, durationSnapshot) {
-                          return StreamBuilder<bool>(
-                            stream: widget.audioService.isPlayingStream,
-                            builder: (context, isPlayingSnapshot) {
-                              return StreamBuilder(
-                                stream: widget.audioService.currentSongStream,
-                                builder: (context, songSnapshot) {
-                                  final position =
-                                      positionSnapshot.data ?? widget.position;
-                                  final duration =
-                                      durationSnapshot.data ?? widget.duration;
-                                  final isPlaying =
-                                      isPlayingSnapshot.data ??
-                                      widget.isPlaying;
-                                  final currentSong = songSnapshot.data;
+                          final duration =
+                              durationSnapshot.data ?? Duration.zero;
+                          final position =
+                              positionSnapshot.data ?? Duration.zero;
 
-                                  return Expanded(
-                                    child: PlayerVertical(
-                                      isPlaying: isPlaying,
-                                      position: position,
-                                      duration: duration,
-                                      onPlayPause: widget.onPlayPause,
-                                      onPrevious: widget.onPrevious,
-                                      onNext: widget.onNext,
-                                      onShuffle: widget.onShuffle,
-                                      onRepeat: widget.onRepeat,
-                                      audioService: widget.audioService,
-                                      songTitle:
-                                          currentSong?.title ??
-                                          widget.songTitle,
-                                      artistName:
-                                          currentSong?.artist ??
-                                          widget.artistName,
+                          return Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () =>
+                                          showMenuBottomSheet(context),
+                                      icon: const Icon(
+                                        Icons.more_vert_rounded,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  );
-                                },
-                              );
-                            },
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: PlayerVertical(
+                                  position: position,
+                                  duration: duration,
+                                  audioProvider: audioProvider,
+                                ),
+                              ),
+                            ],
                           );
                         },
                       );
@@ -193,10 +141,5 @@ class _DetailScreenState extends State<DetailScreen> {
         ),
       ],
     );
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 }

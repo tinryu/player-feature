@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:playermusic1/services/audio_service.dart';
+import '../providers/audio_provider.dart';
 import 'package:playermusic1/services/equalizer_service.dart';
 import 'package:playermusic1/widgets/sleep_timer_dialog.dart';
 import 'package:playermusic1/widgets/equalizer_dialog.dart';
 
 class PlayerMenuBottomSheet extends StatelessWidget {
-  final AudioService audioService;
+  final AudioProvider audioProvider;
   final EqualizerService equalizerService;
 
   const PlayerMenuBottomSheet({
     super.key,
-    required this.audioService,
+    required this.audioProvider,
     required this.equalizerService,
   });
 
@@ -93,16 +93,16 @@ class PlayerMenuBottomSheet extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => SleepTimerDialog(
-        currentTimerMinutes: audioService.sleepTimerMinutes,
+        currentTimerMinutes: audioProvider.sleepTimerMinutes,
         onTimerSet: (minutes) {
-          audioService.setSleepTimer(minutes);
+          audioProvider.startSleepTimer(minutes);
         },
       ),
     );
   }
 
   void _showSongInfo(BuildContext context) {
-    final currentSong = audioService.currentSong;
+    final currentSong = audioProvider.currentSong;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

@@ -1,12 +1,15 @@
+// ignore_for_file: unused_field
+
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import '../services/equalizer_service.dart';
 
-class AudioService {
+class AudioService extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final List<Song> _playlist = [];
   int _currentIndex = -1;
@@ -150,24 +153,37 @@ class AudioService {
     }
   }
 
-  // Clear the cache and reset playlist
-  Future<void> clearCache() async {
+  Future<bool> clearCache() async {
     try {
+      // Clear data from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_cachedPlaylistKey);
-      await prefs.remove(_currentIndexKey);
+      await Future.wait([
+        prefs.remove(_cachedPlaylistKey),
+        prefs.remove(_currentIndexKey),
+      ]);
 
+      // Reset internal state
       _playlist.clear();
       _currentIndex = -1;
-      _playlistController.add(List.from(_playlist));
+      _isPlaying = false;
+
+      // Stop any ongoing playback
+      await _audioPlayer.stop();
+
+      // Update all controllers with the cleared state
+      _playlistController.add([]); // Use empty list directly
       _currentSongController.add(null);
       _currentIndexController.add(-1);
+      _isPlaying = false;
+      _isPlayingController.add(false);
 
-      await _audioPlayer.stop();
-      _updatePlayingState(false);
+      // Notify all listeners after updating controllers
+      notifyListeners();
+
+      return true; // Success
     } catch (e) {
-      print('Error clearing cache: $e');
-      rethrow;
+      debugPrint('Error clearing cache: $e');
+      return false; // Failure
     }
   }
 
@@ -230,16 +246,47 @@ class AudioService {
   void shuffle() {
     if (_playlist.isEmpty) return;
 
+    // Store the current song and its state
     final currentSong = _currentIndex != -1 ? _playlist[_currentIndex] : null;
-    _playlist.shuffle();
-    _playlistController.add(List.from(_playlist));
+    final wasPlaying = _isPlaying;
 
+    // Create a new shuffled list
+    final shuffledList = List<Song>.from(_playlist)..shuffle();
+
+    // Find the current song in the shuffled list
+    int newIndex = -1;
     if (currentSong != null) {
-      final newIndex = _playlist.indexWhere((s) => s.path == currentSong.path);
-      if (newIndex != -1) {
-        _setCurrentIndex(newIndex);
+      newIndex = shuffledList.indexWhere((s) => s.path == currentSong.path);
+      if (newIndex == -1) {
+        // If current song not found in shuffled list (shouldn't happen), use first song
+        newIndex = 0;
       }
+    } else if (shuffledList.isNotEmpty) {
+      newIndex = 0;
     }
+
+    // Update the playlist and current index
+    _playlist.clear();
+    _playlist.addAll(shuffledList);
+    _currentIndex = newIndex;
+
+    // If a song was playing, continue playing from the new position
+    if (wasPlaying && _currentIndex != -1) {
+      playSong(_playlist[_currentIndex]);
+    }
+
+    // Notify listeners
+    _playlistController.add(List<Song>.from(_playlist));
+    _currentIndexController.add(_currentIndex);
+    _currentSongController.add(
+      _currentIndex != -1 ? _playlist[_currentIndex] : null,
+    );
+
+    // Save the updated playlist
+    _savePlaylistToCache();
+
+    // Notify any listeners of the change
+    notifyListeners();
   }
 
   // Get recently played songs (most recent first)
@@ -364,13 +411,32 @@ class AudioService {
     _sleepTimerController.add(0);
   }
 
+  // Position and duration tracking
+  final StreamController<Duration> _positionController =
+      StreamController<Duration>.broadcast();
+  final StreamController<Duration> _durationController =
+      StreamController<Duration>.broadcast();
+
+  @override
   void dispose() {
-    _sleepTimer?.cancel();
+    // Stop any ongoing playback
+    _audioPlayer.stop();
+
+    // Close all stream controllers
     _isPlayingController.close();
     _playlistController.close();
     _currentIndexController.close();
     _currentSongController.close();
     _sleepTimerController.close();
+
+    // Cancel any active timers
+    _sleepTimer?.cancel();
+
+    // Dispose of audio player and equalizer
     _audioPlayer.dispose();
+    _equalizerService?.dispose();
+
+    // Call super dispose last
+    super.dispose();
   }
 }

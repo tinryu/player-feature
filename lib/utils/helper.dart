@@ -26,9 +26,27 @@ class Helper {
 
   /// Shows a snackbar with the given message
   static void showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        content: Row(
+          children: [
+            Text(message, style: TextStyle(color: Colors.black)),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.black),
+              onPressed: () =>
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+            ),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        backgroundColor: Colors.white,
+      ),
+    );
   }
 
   /// Shows a confirmation dialog

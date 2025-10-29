@@ -1,10 +1,13 @@
-import 'dart:io';
+// ignore_for_file: use_build_context_synchronously
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
-import 'package:playermusic1/widgets/player_min.dart';
 import 'dart:async';
-import '../services/audio_service.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/player_min.dart';
 import '../services/audio_scanner_service.dart';
 import '../services/equalizer_service.dart';
 import '../models/song.dart';
@@ -13,6 +16,8 @@ import '../widgets/song_list_widget.dart';
 import '../widgets/folder_list_widget.dart';
 import '../utils/helper.dart';
 import '../utils/permission_helper.dart';
+import '../providers/song_provider.dart';
+import '../providers/audio_provider.dart';
 
 class PlaylistScreen extends StatefulWidget {
   const PlaylistScreen({super.key});
@@ -23,185 +28,330 @@ class PlaylistScreen extends StatefulWidget {
 
 /// Extension to access the PlaylistScreenState from the context
 extension PlaylistScreenStateExtension on BuildContext {
-  PlaylistScreenState? get playlistScreenState => 
+  PlaylistScreenState? get playlistScreenState =>
       findAncestorStateOfType<PlaylistScreenState>();
 }
 
-class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderStateMixin {
-
-  bool _sortAscending = true; // true for A-Z, false for Z-A
-  late final AudioService _audioService;
+class PlaylistScreenState extends State<PlaylistScreen>
+    with TickerProviderStateMixin {
+  static const String _cachedFolderPathKey = 'lastScannedFolderPath';
+  late final AudioProvider _audioProvider;
   late final EqualizerService _equalizerService;
   final AudioScannerService _audioScanner = AudioScannerService();
   late TabController _tabController;
-  List<Song> _songs = [];
-  // ignore: unused_field
-  Song? _currentSong;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late AnimationController _playerBarAnimationController;
   late Animation<double> _playerBarAnimation;
+  Song? _currentSong;
+  bool _sortAscending = true; // true for A-Z, false for Z-A
   bool _isPlayerBarVisible = false;
-  bool get isPlayerBarVisible => _isPlayerBarVisible;
-  
-  void showPlayerBar() {
-    if (mounted) {
-      setState(() {
-        _isPlayerBarVisible = true;
-        if (!_playerBarAnimationController.isAnimating) {
-          _playerBarAnimationController.forward();
-        }
-      });
-    }
-  }
-  
-  void setCurrentSong(Song song) {
-    if (mounted) {
-      setState(() {
-        _currentSong = song;
-      });
-    }
-  }
-  List<AudioFolder> _audioFolders = [];
   bool _isLoadingFolders = false;
+  bool get isPlayerBarVisible => _isPlayerBarVisible;
+  List<Song> get _songs => context.watch<SongProvider>().songs;
+  List<Song> get _recentlyPlayed =>
+      context.watch<SongProvider>().recentlyPlayed;
+  List<AudioFolder> _audioFolders = [];
+
+  void showPlayerBar() {
+    if (!mounted) return;
+
+    // Ensure the player bar is visible
+    _isPlayerBarVisible = true;
+
+    // Reset and start the animation
+    if (_playerBarAnimationController.isCompleted) {
+      _playerBarAnimationController.reset();
+    }
+
+    if (!_playerBarAnimationController.isAnimating) {
+      _playerBarAnimationController.forward();
+    }
+
+    // Force a rebuild
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize services
+    _audioProvider = context.read<AudioProvider>();
+    _audioProvider.addListener(_onAudioChange);
+    _equalizerService = EqualizerService();
+    _tabController = TabController(length: 3, vsync: this);
+    // Set up animations
+    _initAnimations();
+    _initAudioService();
+  }
 
   @override
   void dispose() {
     _animationController.dispose();
     _playerBarAnimationController.dispose();
     _tabController.dispose();
+    _audioProvider.removeListener(_onAudioChange);
     super.dispose();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _audioService = AudioService();
-    _equalizerService = EqualizerService();
-
-    // Connect equalizer service with audio service
-    _audioService.setEqualizerService(_equalizerService);
-    _tabController = TabController(length: 4, vsync: this);
-
-    // Initialize equalizer icon animation
+  void _initAnimations() {
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-
-    _fadeAnimation = Tween<double>(begin: 0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+      duration: const Duration(milliseconds: 300),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
-    // Initialize player bar fade animation
     _playerBarAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 200),
+    );
+    _playerBarAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _playerBarAnimationController,
+        curve: Curves.easeInOut,
+      ),
     );
 
-    _playerBarAnimation = CurvedAnimation(
-      parent: _playerBarAnimationController,
-      curve: Curves.easeInOut,
-    );
+    _animationController.forward();
+  }
 
-    // Request permissions first, then load songs
-    _requestPermissionsAndLoad();
+  void _onAudioChange() {
+    if (mounted) {
+      setState(() {
+        _currentSong = _audioProvider.currentSong;
+        if (_currentSong != null && !_isPlayerBarVisible) {
+          _isPlayerBarVisible = true;
+          _playerBarAnimationController.forward();
+        }
+      });
+    }
+  }
 
-    // Listen for song changes
-    _audioService.currentSongStream.listen((song) {
-      if (mounted) {
-        setState(() {
-          _currentSong = song;
-          // Show player bar when a song is selected
-          if (song != null && !_isPlayerBarVisible) {
-            _isPlayerBarVisible = true;
-            _playerBarAnimationController.forward();
-          }
-        });
+  Future<void> _initAudioService() async {
+    try {
+      // Request storage permission
+      final hasPermission = await PermissionHelper.requestStoragePermission(
+        context,
+      );
+
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Storage permission is required to access music files',
+              ),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
       }
-    });
+
+      // Initialize audio service and load songs
+      final songProvider = context.read<SongProvider>();
+
+      if (songProvider.songs.isEmpty) {
+        await songProvider.loadSongs();
+      } else {}
+
+      // Start fade in animation
+      _animationController.forward();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error initializing audio service: ${e.toString()}'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showClearCacheDialog() async {
     final shouldClear = await Helper.showConfirmationDialog(
       context: context,
       title: 'Clear Cache',
-      content: 'This will remove all cached music data. Are you sure?',
-      cancelText: 'CANCEL',
-      confirmText: 'CLEAR',
+      content:
+          'This will remove all cached data and reset the player. Continue?',
+      confirmText: 'Clear',
     );
 
-    if (shouldClear == true) {
+    if (shouldClear == true && mounted) {
       try {
-        await _audioService.clearCache();
+        final songProvider = context.read<SongProvider>();
+        final success = await songProvider.clearCacheAndRefresh();
+
         if (mounted) {
+          // Clear current song and hide player bar
           setState(() {
-            _songs = [];
             _currentSong = null;
-            // Hide player bar when cache is cleared
-            if (_isPlayerBarVisible) {
-              _playerBarAnimationController.reverse();
-              _isPlayerBarVisible = false;
-            }
+            _isPlayerBarVisible = false;
           });
-          Helper.showSnackBar(context, 'Cache cleared successfully');
+
+          // Force a rebuild of the widget tree
+          if (success) {
+            await songProvider.loadSongs(); // Ensure songs are reloaded
+            setState(() {}); // Trigger a rebuild
+            Helper.showSnackBar(context, 'Cache cleared successfully');
+          } else {
+            Helper.showSnackBar(context, 'Failed to clear cache');
+          }
         }
       } catch (e) {
         if (mounted) {
-          Helper.showSnackBar(context, 'Failed to clear cache: $e');
+          Helper.showSnackBar(context, 'Error clearing cache: $e');
         }
       }
     }
   }
 
-  Future<void> _requestPermissionsAndLoad() async {
-    // Request storage permission on app start
+  Future<void> _scanForAudioFiles({bool forceRescan = false}) async {
+    if (!mounted) return;
+
+    // Request storage permission
     final hasPermission = await PermissionHelper.requestStoragePermission(
       context,
     );
-    if (hasPermission) {
-      // Load existing songs
-      await _loadSongs();
-      // Auto scan for folders
-      await _autoScanFolders();
-    } else {
-      if (mounted) {
-        Helper.showSnackBar(
-          context,
-          'Storage permission is required to access music files',
-        );
-      }
+    if (!hasPermission) {
+      setState(() => _isLoadingFolders = false);
+      return;
     }
-  }
 
-  Future<void> _loadSongs() async {
+    // Set loading state
+    setState(() => _isLoadingFolders = true);
+
     try {
-      // First load any cached songs
-      await _audioService.loadCachedPlaylist();
+      final songProvider = context.read<SongProvider>();
+      List<File> files = [];
+      bool hasSongs = false;
+      String? message;
 
-      // Get the songs asynchronously
-      final songs = await _audioService.getSongs();
+      if (forceRescan) {
+        // Force rescan and update cache
+        files = await _scanAndLoadSongs(songProvider);
+        hasSongs = files.isNotEmpty;
+        if (hasSongs) {
+          message = 'Found ${files.length} audio files';
+          // Update the audio provider with the new playlist
+          _audioProvider.setPlaylist(
+            files.map((file) => Song.fromFile(file.path)).toList(),
+          );
+          // Force reload songs from the provider
+          await songProvider.loadSongs();
+          // Auto-play the first song if none is playing
+          // if (_currentSong == null && files.isNotEmpty) {
+          //   _playSong(Song.fromFile(files.first.path));
+          // }
+        }
+      } else {
+        // Try to use cached files first
+        final cachedFiles = await _audioScanner.getCachedFiles();
+        if (cachedFiles != null && cachedFiles.isNotEmpty) {
+          files = cachedFiles;
+          await songProvider.loadSongs();
+          hasSongs = songProvider.songs.isNotEmpty;
+          if (hasSongs) {
+            message = 'Loaded ${files.length} audio files from cache';
+            _audioProvider.setPlaylist(
+              files.map((file) => Song.fromFile(file.path)).toList(),
+            );
+          }
+        }
 
-      // Update the UI with the loaded songs
+        // If no cached files or cache loading failed, try auto-scan
+        if (!hasSongs) {
+          files = await _tryAutoScan(songProvider);
+          hasSongs = songProvider.songs.isNotEmpty;
+          if (hasSongs) {
+            _audioProvider.setPlaylist(
+              files.map((file) => Song.fromFile(file.path)).toList(),
+            );
+          }
+        }
+      }
+
+      // Update UI
       if (mounted) {
         setState(() {
-          _songs = songs;
+          _isLoadingFolders = false;
+          // The playlist will be updated automatically through the provider
         });
-      }
 
-      // Optionally scan for new audio files (uncomment if needed)
-      // await _scanForAudioFiles();
+        // Show appropriate message
+        if (message != null && mounted) {
+          Helper.showSnackBar(context, message);
+        } else if (!hasSongs && mounted) {
+          Helper.showSnackBar(
+            context,
+            'No audio files found. Please check your storage permissions and try again.',
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading songs: $e')));
+        setState(() {
+          _isLoadingFolders = false;
+        });
+        Helper.showSnackBar(context, 'Error scanning for audio files: $e');
       }
     }
   }
 
-  Future<void> _scanForAudioFiles() async {
-    // Check permission before scanning
+  Future<List<File>> _scanAndLoadSongs(SongProvider songProvider) async {
+    try {
+      final files = await _audioScanner.scanForAudioFiles();
+      if (files.isNotEmpty && mounted) {
+        await songProvider.loadSongs();
+      }
+      return files;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in _scanAndLoadSongs: $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<File>> _tryAutoScan(SongProvider songProvider) async {
+    try {
+      // Try auto-scanning common folders
+      final folders = await _audioScanner.autoScanForAudioFolders();
+      if (folders.isNotEmpty) {
+        // Try to get files from the first found folder
+        final files = await _audioScanner.getAudioFilesFromFolder(
+          folders.first.path,
+        );
+        if (files.isNotEmpty) {
+          await songProvider.loadSongs();
+          if (songProvider.songs.isNotEmpty) {
+            if (mounted) {
+              Helper.showSnackBar(
+                context,
+                'Found ${files.length} audio files in ${folders.first.name}',
+              );
+            }
+            return files;
+          }
+        }
+      }
+
+      // Fall back to manual scan if auto-scan finds no files
+      return await _scanAndLoadSongs(songProvider);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in _tryAutoScan: $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _scanForFolders({bool forceRescan = false}) async {
     final hasPermission = await PermissionHelper.requestStoragePermission(
       context,
     );
@@ -209,23 +359,76 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
       return;
     }
 
+    setState(() {
+      _isLoadingFolders = true;
+    });
+
     try {
-      final files = await _audioScanner.scanForAudioFiles();
+      List<AudioFolder> folders;
+
+      if (!forceRescan) {
+        // Try auto-scanning common folders first
+        folders = await _audioScanner.autoScanForAudioFolders();
+        if (folders.isNotEmpty) {
+          setState(() => _audioFolders = folders);
+          return;
+        }
+      }
+
+      folders = await _audioScanner.scanForAudioFolders();
+
+      if (folders.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_cachedFolderPathKey, folders.first.path);
+      }
+
+      setState(() => _audioFolders = folders);
+    } catch (e) {
+      if (mounted) {
+        Helper.showSnackBar(context, 'Error scanning folders: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingFolders = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _onFolderTap(AudioFolder folder) async {
+    try {
+      final files = await _audioScanner.getAudioFilesFromFolder(folder.path);
       if (files.isNotEmpty) {
-        _audioService.addSongs(files);
+        final songs = files.map((file) => Song.fromFile(file.path)).toList();
+        _audioProvider.addSongs(songs);
         if (mounted) {
-          setState(() {
-            _songs = _audioService.getSongs() as List<Song>;
-          });
+          final songProvider = context.read<SongProvider>();
+          await songProvider.loadSongs();
+          if (mounted) {
+            Helper.showSnackBar(
+              context,
+              'Added ${files.length} song${files.length > 1 ? 's' : ''} from ${folder.name}',
+            );
+          }
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error scanning for audio files: $e')),
-        );
+        Helper.showSnackBar(context, 'Error loading folder: $e');
       }
     }
+  }
+
+  Future<void> _playSong(Song song) async {
+    await _audioProvider.playSong(song);
+    setState(() {
+      _currentSong = song;
+      _isPlayerBarVisible = true;
+    });
+
+    final songProvider = context.read<SongProvider>();
+    songProvider.addToRecentlyPlayed(song);
   }
 
   Future<void> _pickAndAddFiles() async {
@@ -236,116 +439,19 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
       );
 
       if (result != null) {
-        List<File> files = result.paths.map((path) => File(path!)).toList();
-        _audioService.addSongs(files);
-        if (mounted) {
-          setState(() {
-            _songs = _audioService.getSongs() as List<Song>;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Added ${files.length} song(s) to playlist'),
-            ),
-          );
+        final songProvider = context.read<SongProvider>();
+        final newSongs = await songProvider.addSongsFromFiles(result.files);
+
+        if (newSongs.isNotEmpty) {
+          _audioProvider.setPlaylist(newSongs);
+          _playSong(newSongs.first);
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error picking files: $e')));
-      }
-    }
-  }
-
-  Future<void> _autoScanFolders() async {
-    setState(() {
-      _isLoadingFolders = true;
-    });
-
-    try {
-      // Check permission before scanning
-      final hasPermission = await PermissionHelper.hasStoragePermission();
-      if (!hasPermission) {
-        setState(() {
-          _isLoadingFolders = false;
-        });
-        return;
-      }
-
-      final folders = await _audioScanner.autoScanForAudioFolders();
-      if (mounted) {
-        setState(() {
-          _audioFolders = folders;
-          _isLoadingFolders = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingFolders = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _scanForFolders() async {
-    // Check permission before scanning
-    final hasPermission = await PermissionHelper.requestStoragePermission(
-      context,
-    );
-    if (!hasPermission) {
-      return;
-    }
-
-    setState(() {
-      _isLoadingFolders = true;
-    });
-
-    try {
-      final folders = await _audioScanner.scanForAudioFolders();
-      if (mounted) {
-        setState(() {
-          _audioFolders = folders;
-          _isLoadingFolders = false;
-        });
-        if (folders.isNotEmpty) {
-          Helper.showSnackBar(
-            context,
-            'Found ${folders.length} folder${folders.length > 1 ? 's' : ''} with audio files',
-          );
-        } else {
-          Helper.showSnackBar(context, 'No folders with audio files found');
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingFolders = false;
-        });
-        Helper.showSnackBar(context, 'Error scanning folders: $e');
-      }
-    }
-  }
-
-  Future<void> _onFolderTap(AudioFolder folder) async {
-    try {
-      final files = await _audioScanner.getAudioFilesFromFolder(folder.path);
-      if (files.isNotEmpty) {
-        _audioService.addSongs(files);
-        if (mounted) {
-          setState(() {
-            _songs = _audioService.getSongs() as List<Song>;
-          });
-          Helper.showSnackBar(
-            context,
-            'Added ${files.length} song${files.length > 1 ? 's' : ''} from ${folder.name}',
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        Helper.showSnackBar(context, 'Error loading folder: $e');
+        ).showSnackBar(SnackBar(content: Text('Error adding files: $e')));
       }
     }
   }
@@ -373,9 +479,8 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                   indicatorColor: Theme.of(context).colorScheme.onSurface,
                   indicatorPadding: EdgeInsets.zero,
                   tabs: const [
-                    Tab(text: 'Playlist'),
-                    Tab(text: 'Tracks'),
-                    Tab(text: 'Recent'),
+                    Tab(text: 'Songs'),
+                    Tab(text: 'Recent Played'),
                     Tab(text: 'Folder'),
                   ],
                 ),
@@ -386,7 +491,20 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                   children: [
                     // Playlist Tab
                     _songs.isEmpty
-                        ? const Center(child: Text('No songs in playlist'))
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('No songs in playlist'),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () =>
+                                      _scanForAudioFiles(forceRescan: true),
+                                  child: const Text('Scan for Audio Files'),
+                                ),
+                              ],
+                            ),
+                          )
                         : Column(
                             children: [
                               Padding(
@@ -406,35 +524,8 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                                     ),
                                   ),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
-                                      TextButton.icon(
-                                        onPressed: _songs.isNotEmpty
-                                            ? () {
-                                                _audioService.shuffle();
-                                                setState(() {
-                                                  _songs =
-                                                      _audioService.getSongs()
-                                                          as List<Song>;
-                                                });
-                                              }
-                                            : null,
-                                        icon: Icon(
-                                          Icons.play_circle_fill_rounded,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface,
-                                        ),
-                                        label: Text(
-                                          'Shuffle',
-                                          style: TextStyle(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                          ),
-                                        ),
-                                      ),
                                       PopupMenuButton<String>(
                                         elevation: 2,
                                         shape: RoundedRectangleBorder(
@@ -458,7 +549,6 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                                                   const Icon(
                                                     Icons.delete_sweep_rounded,
                                                     size: 20,
-                                                    color: Colors.black87,
                                                   ),
                                                   const SizedBox(
                                                     width: 12,
@@ -466,7 +556,6 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                                                   Text(
                                                     'Clear Playlists',
                                                     style: TextStyle(
-                                                      color: Colors.black87,
                                                       fontSize: 14,
                                                     ),
                                                   ),
@@ -491,7 +580,6 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                                                   Icon(
                                                     Icons.swap_vert_rounded,
                                                     size: 20,
-                                                    color: Colors.black87,
                                                   ),
                                                   const SizedBox(
                                                     width: 12,
@@ -501,7 +589,6 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                                                         ? 'A → Z'
                                                         : 'Z → A',
                                                     style: TextStyle(
-                                                      color: Colors.black87,
                                                       fontSize: 14,
                                                     ),
                                                   ),
@@ -509,17 +596,39 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                                               ),
                                             ),
                                             onTap: () {
-                                              setState(() {
-                                                _songs.sort((a, b) {
-                                                  final comparison = a.title
+                                              final songProvider = context
+                                                  .read<SongProvider>();
+                                              songProvider.sortSongs((a, b) {
+                                                // First compare by title
+                                                int comparison = a.title
+                                                    .toLowerCase()
+                                                    .compareTo(
+                                                      b.title.toLowerCase(),
+                                                    );
+
+                                                // If titles are the same, compare by artist
+                                                if (comparison == 0) {
+                                                  comparison = a.artist
                                                       .toLowerCase()
                                                       .compareTo(
-                                                        b.title.toLowerCase(),
+                                                        b.artist.toLowerCase(),
                                                       );
-                                                  return _sortAscending
-                                                      ? comparison
-                                                      : -comparison;
-                                                });
+
+                                                  // If artists are also the same, compare by path as final tiebreaker
+                                                  if (comparison == 0) {
+                                                    comparison = a.path
+                                                        .toLowerCase()
+                                                        .compareTo(
+                                                          b.path.toLowerCase(),
+                                                        );
+                                                  }
+                                                }
+
+                                                return _sortAscending
+                                                    ? comparison
+                                                    : -comparison;
+                                              });
+                                              setState(() {
                                                 _sortAscending =
                                                     !_sortAscending;
                                               });
@@ -538,39 +647,21 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                               Expanded(
                                 child: SongListWidget(
                                   songs: _songs,
-                                  audioService: _audioService,
+                                  onSongSelected: _playSong,
                                   fadeAnimation: _fadeAnimation,
+                                  currentSong: _currentSong,
                                 ),
                               ),
                             ],
                           ),
-                    // Tracks Tab
-                    _songs.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text('No tracks found'),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: _scanForAudioFiles,
-                                  child: const Text('Scan for Audio Files'),
-                                ),
-                              ],
-                            ),
-                          )
-                        : SongListWidget(
-                            songs: _songs,
-                            audioService: _audioService,
-                            fadeAnimation: _fadeAnimation,
-                          ),
                     // Recently Played Tab
-                    _songs.isEmpty
-                        ? const Center(child: Text('No recently played tracks'))
+                    _recentlyPlayed.isEmpty
+                        ? Center(child: Text('No recently played tracks'))
                         : SongListWidget(
-                            songs: _audioService.getRecentlyPlayed(),
-                            audioService: _audioService,
+                            songs: _recentlyPlayed,
+                            onSongSelected: _playSong,
                             fadeAnimation: _fadeAnimation,
+                            currentSong: _currentSong,
                           ),
                     // Folder Tab
                     _isLoadingFolders
@@ -635,26 +726,23 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                         : Column(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.all(12.0),
+                                padding: const EdgeInsets.all(0.0),
                                 child: Row(
                                   mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    Text(
-                                      '${_audioFolders.length} folder${_audioFolders.length > 1 ? 's' : ''}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey.shade600,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
                                     TextButton.icon(
-                                      onPressed: _scanForFolders,
+                                      onPressed: () =>
+                                          _scanForFolders(forceRescan: true),
                                       icon: const Icon(
-                                        Icons.refresh_rounded,
-                                        size: 18,
+                                        Icons.folder_copy,
+                                        size: 20,
+                                        color: Colors.black,
                                       ),
-                                      label: const Text('Rescan'),
+                                      label: const Text(
+                                        'open',
+                                        style: TextStyle(color: Colors.black),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -692,29 +780,19 @@ class PlaylistScreenState extends State<PlaylistScreen> with TickerProviderState
                         vertical: 4.0,
                       ),
                       child: StreamBuilder<Duration>(
-                        stream: _audioService.positionStream,
+                        stream: _audioProvider.positionStream,
                         builder: (context, positionSnapshot) {
                           return StreamBuilder<Duration>(
-                            stream: _audioService.durationStream,
+                            stream: _audioProvider.durationStream,
                             builder: (context, durationSnapshot) {
                               final duration =
                                   durationSnapshot.data ?? Duration.zero;
                               final position =
                                   positionSnapshot.data ?? Duration.zero;
                               return PlayerMinBar(
-                                isPlaying: _audioService.isPlaying,
                                 position: position,
                                 duration: duration,
-                                onPlayPause: _audioService.togglePlayPause,
-                                onNext: _audioService.next,
-                                onPrevious: _audioService.previous,
-                                onShuffle: _audioService.shuffle,
-                                onRepeat: _audioService.repeat,
                                 onOpenFiles: _pickAndAddFiles,
-                                songTitle:
-                                    _currentSong?.title ?? 'No song selected',
-                                currentSong: _currentSong,
-                                audioService: _audioService,
                                 equalizerService: _equalizerService,
                               );
                             },
