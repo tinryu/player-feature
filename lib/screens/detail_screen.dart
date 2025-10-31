@@ -65,76 +65,78 @@ class DetailScreen extends StatelessWidget {
             color: Colors.transparent,
             child: SizedBox(
               height: double.infinity,
-              child: Column(
-                children: [
-                  GestureDetector(
-                    onVerticalDragEnd: (details) {
-                      if (details.primaryVelocity! > 0) {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    child: Container(
-                      height: 40,
-                      alignment: Alignment.center,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onVerticalDragEnd: (details) {
+                        if (details.primaryVelocity! > 0) {
+                          Navigator.of(context).pop();
+                        }
+                      },
                       child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(2),
+                        height: 40,
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  //     // Player controls
-                  StreamBuilder<Duration>(
-                    stream: audioProvider.positionStream,
-                    builder: (context, positionSnapshot) {
-                      return StreamBuilder<Duration>(
-                        stream: audioProvider.durationStream,
-                        builder: (context, durationSnapshot) {
-                          final duration =
-                              durationSnapshot.data ?? Duration.zero;
-                          final position =
-                              positionSnapshot.data ?? Duration.zero;
+                    //     // Player controls
+                    StreamBuilder<Duration>(
+                      stream: audioProvider.positionStream,
+                      builder: (context, positionSnapshot) {
+                        return StreamBuilder<Duration>(
+                          stream: audioProvider.durationStream,
+                          builder: (context, durationSnapshot) {
+                            final duration =
+                                durationSnapshot.data ?? Duration.zero;
+                            final position =
+                                positionSnapshot.data ?? Duration.zero;
 
-                          return Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    IconButton(
-                                      onPressed: () =>
-                                          showMenuBottomSheet(context),
-                                      icon: const Icon(
-                                        Icons.more_vert_rounded,
-                                        color: Colors.white,
+                            return Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      IconButton(
+                                        onPressed: () =>
+                                            showMenuBottomSheet(context),
+                                        icon: const Icon(
+                                          Icons.more_vert_rounded,
+                                          color: Colors.white,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: PlayerVertical(
+                                    position: position,
+                                    duration: duration,
+                                    audioProvider: audioProvider,
+                                  ),
                                 ),
-                                child: PlayerVertical(
-                                  position: position,
-                                  duration: duration,
-                                  audioProvider: audioProvider,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

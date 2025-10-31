@@ -6,10 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/audio_folder.dart';
 
 class AudioScannerService {
+  static const Duration _cacheDuration = Duration(days: 7);
   static const String _cachedDirKey = 'last_scanned_directory';
   static const String _cachedFilesKey = 'cached_audio_files';
   static const String _lastScanTimeKey = 'last_scan_timestamp';
-  static const Duration _cacheDuration = Duration(days: 7);
+
+  static const String _cachedFolderPathKey = 'lastScannedFolderPath';
+  static const String _cachedFolderListKey = '${_cachedFolderPathKey}_list';
+  static const String _cachedFolderCountsKey = '${_cachedFolderPathKey}_counts';
 
   /// Checks if the cache is still valid
   Future<bool> _isCacheValid() async {
@@ -23,26 +27,6 @@ class AudioScannerService {
         print('Error checking cache validity: $e');
       }
       return false;
-    }
-  }
-
-  /// Saves the directory path and files to cache
-  Future<void> _saveToCache(String directoryPath, List<File> files) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cachedDirKey, directoryPath);
-      await prefs.setStringList(
-        _cachedFilesKey,
-        files.map((file) => file.path).toList(),
-      );
-      await prefs.setInt(
-        _lastScanTimeKey,
-        DateTime.now().millisecondsSinceEpoch,
-      );
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error saving to cache: $e');
-      }
     }
   }
 
@@ -68,7 +52,86 @@ class AudioScannerService {
         print('Error getting cached files: $e');
       }
     }
-    return null;
+    return [];
+  }
+
+  Future<List<AudioFolder>> getCachedFolders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get the list of cached folder paths
+      final cachedFolderPaths = prefs.getStringList(_cachedFolderListKey) ?? [];
+      if (cachedFolderPaths.isEmpty) {
+        if (kDebugMode) {
+          print('No cached folder paths found');
+        }
+        return [];
+      }
+
+      // Get the cached song counts
+      final cachedSongCounts =
+          prefs.getStringList(_cachedFolderCountsKey) ?? [];
+
+      if (kDebugMode) {
+        print('Retrieved from cache:');
+        print('  Folder paths: $cachedFolderPaths');
+        print('  Song counts: $cachedSongCounts');
+      }
+
+      // Convert paths to AudioFolder objects with their respective song counts
+      return List<AudioFolder>.generate(cachedFolderPaths.length, (index) {
+        final path = cachedFolderPaths[index];
+        final songCount = index < cachedSongCounts.length
+            ? int.tryParse(cachedSongCounts[index]) ?? 0
+            : 0;
+
+        if (kDebugMode) {
+          print('Creating AudioFolder: path=$path, songCount=$songCount');
+        }
+        return AudioFolder(
+          path: path,
+          name: AudioFolder.getFolderName(path),
+          songCount: songCount,
+        );
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error getting cached folders: $e');
+      }
+      return [];
+    }
+  }
+
+  /// Request storage permissions based on Android version
+  /// Clears all cached folder data including paths and song counts
+  Future<bool> clearCachedFolders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cachedFolderPathKey);
+      await prefs.remove(_cachedFolderListKey);
+      await prefs.remove(_cachedFolderCountsKey);
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error clearing cached folders: $e');
+      }
+      return false;
+    }
+  }
+
+  Future<bool> clearCachedFile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cachedDirKey);
+      await prefs.remove(_cachedFilesKey);
+      await prefs.remove(_lastScanTimeKey);
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error clearing cached files: $e');
+      }
+      return false;
+    }
   }
 
   /// Request storage permissions based on Android version
@@ -178,6 +241,57 @@ class AudioScannerService {
     }
   }
 
+  /// Saves the directory path and files to cache
+  Future<void> _saveToCache(String directoryPath, List<File> files) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cachedDirKey, directoryPath);
+      await prefs.setStringList(
+        _cachedFilesKey,
+        files.map((file) => file.path).toList(),
+      );
+      await prefs.setInt(
+        _lastScanTimeKey,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving to cache: $e');
+      }
+    }
+  }
+
+  Future<void> _saveFoldersToCache(List<AudioFolder> folders) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (folders.isNotEmpty) {
+        final mainFolderPath = Directory(folders.first.path).parent.path;
+        await prefs.setString(_cachedFolderPathKey, mainFolderPath);
+
+        // Save folder paths
+        final folderPaths = folders.map((folder) => folder.path).toList();
+        await prefs.setStringList(_cachedFolderListKey, folderPaths);
+
+        // Save song counts
+        final songCounts = folders
+            .map((folder) => folder.songCount.toString())
+            .toList();
+        await prefs.setStringList(_cachedFolderCountsKey, songCounts);
+
+        if (kDebugMode) {
+          print('Saved to cache:');
+          print('  Folder paths: $folderPaths');
+          print('  Song counts: $songCounts');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving folders to cache: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Recursively finds audio files in a directory
   Future<List<File>> _findAudioFiles(Directory directory) async {
     final List<File> audioFiles = [];
@@ -251,11 +365,12 @@ class AudioScannerService {
     try {
       // Request storage permission
       final hasPermission = await _requestStoragePermission();
+
       if (hasPermission) {
         // Let user select a directory to scan
         final directoryPath = await FilePicker.platform.getDirectoryPath();
         if (directoryPath != null) {
-          final folders = await _findAudioFolders(Directory(directoryPath));
+          final folders = await findAudioFolders(Directory(directoryPath));
           return folders;
         }
       } else {
@@ -305,7 +420,7 @@ class AudioScannerService {
           final directory = Directory(dirPath);
           if (await directory.exists()) {
             try {
-              final folders = await _findAudioFolders(directory);
+              final folders = await findAudioFolders(directory);
               allFolders.addAll(folders);
             } catch (e) {
               if (kDebugMode) {
@@ -337,7 +452,7 @@ class AudioScannerService {
   }
 
   /// Finds folders containing audio files
-  Future<List<AudioFolder>> _findAudioFolders(Directory directory) async {
+  Future<List<AudioFolder>> findAudioFolders(Directory directory) async {
     final Map<String, int> folderSongCount = {};
 
     try {
@@ -375,6 +490,48 @@ class AudioScannerService {
     folders.sort((a, b) => b.songCount.compareTo(a.songCount));
 
     return folders;
+  }
+
+  /// Scans for audio folders with optional force rescan
+  Future<List<AudioFolder>> scanAudioFolders({bool forceRescan = false}) async {
+    try {
+      if (!forceRescan) {
+        // Try auto-scanning common folders first
+        final autoFolders = await autoScanForAudioFolders();
+        if (autoFolders.isNotEmpty) {
+          if (kDebugMode) {
+            print('Found ${autoFolders.length} folders in auto-scan');
+          }
+          await _saveFoldersToCache(autoFolders);
+          return autoFolders;
+        }
+
+        // Try to get cached folders if auto-scan didn't find anything
+        final cachedFolders = await getCachedFolders();
+        if (cachedFolders.isNotEmpty) {
+          if (kDebugMode) {
+            print('Found ${cachedFolders.length} folders in cache');
+          }
+          return cachedFolders;
+        }
+      }
+
+      // Fall back to full scan if auto-scan finds nothing or forceRescan is true
+      final folders = await scanForAudioFolders();
+      if (kDebugMode) {
+        print('Scanned ${folders.length} folders');
+      }
+      // Cache the first folder path if found
+      if (folders.isNotEmpty) {
+        await _saveFoldersToCache(folders);
+      }
+      return folders;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in scanAudioFolders: $e');
+      }
+      rethrow;
+    }
   }
 
   /// Get audio files from a specific folder

@@ -3,10 +3,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/player_min.dart';
 import '../services/audio_scanner_service.dart';
 import '../services/equalizer_service.dart';
@@ -34,7 +32,6 @@ extension PlaylistScreenStateExtension on BuildContext {
 
 class PlaylistScreenState extends State<PlaylistScreen>
     with TickerProviderStateMixin {
-  static const String _cachedFolderPathKey = 'lastScannedFolderPath';
   late final AudioProvider _audioProvider;
   late final EqualizerService _equalizerService;
   final AudioScannerService _audioScanner = AudioScannerService();
@@ -85,6 +82,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
     // Set up animations
     _initAnimations();
     _initAudioService();
+    _initData();
   }
 
   @override
@@ -94,6 +92,27 @@ class PlaylistScreenState extends State<PlaylistScreen>
     _tabController.dispose();
     _audioProvider.removeListener(_onAudioChange);
     super.dispose();
+  }
+
+  Future _initData() async {
+    final songProvider = context.read<SongProvider>();
+    final files = await _audioScanner.getCachedFiles();
+    final folders = await _audioScanner.getCachedFolders();
+    //Load cached file all directory
+    if (files != null) {
+      _audioProvider.setPlaylist(
+        files.map((file) => Song.fromFile(file.path)).toList(),
+      );
+      songProvider.loadSongs();
+    }
+
+    if (folders.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _audioFolders = folders;
+        });
+      }
+    }
   }
 
   void _initAnimations() {
@@ -213,7 +232,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
 
   Future<void> _scanForAudioFiles({bool forceRescan = false}) async {
     if (!mounted) return;
-
     // Request storage permission
     final hasPermission = await PermissionHelper.requestStoragePermission(
       context,
@@ -228,52 +246,32 @@ class PlaylistScreenState extends State<PlaylistScreen>
 
     try {
       final songProvider = context.read<SongProvider>();
+      final cachedFiles = await _audioScanner.getCachedFiles();
       List<File> files = [];
       bool hasSongs = false;
       String? message;
 
       if (forceRescan) {
-        // Force rescan and update cache
-        files = await _scanAndLoadSongs(songProvider);
-        hasSongs = files.isNotEmpty;
-        if (hasSongs) {
-          message = 'Found ${files.length} audio files';
-          // Update the audio provider with the new playlist
-          _audioProvider.setPlaylist(
-            files.map((file) => Song.fromFile(file.path)).toList(),
-          );
-          // Force reload songs from the provider
-          await songProvider.loadSongs();
-          // Auto-play the first song if none is playing
-          // if (_currentSong == null && files.isNotEmpty) {
-          //   _playSong(Song.fromFile(files.first.path));
-          // }
-        }
-      } else {
-        // Try to use cached files first
-        final cachedFiles = await _audioScanner.getCachedFiles();
         if (cachedFiles != null && cachedFiles.isNotEmpty) {
           files = cachedFiles;
-          await songProvider.loadSongs();
-          hasSongs = songProvider.songs.isNotEmpty;
-          if (hasSongs) {
+          if (hasSongs = files.isNotEmpty) {
             message = 'Loaded ${files.length} audio files from cache';
             _audioProvider.setPlaylist(
               files.map((file) => Song.fromFile(file.path)).toList(),
             );
           }
-        }
-
-        // If no cached files or cache loading failed, try auto-scan
-        if (!hasSongs) {
-          files = await _tryAutoScan(songProvider);
-          hasSongs = songProvider.songs.isNotEmpty;
-          if (hasSongs) {
+        } else {
+          // Force rescan and update cache
+          final files = await _audioScanner.scanForAudioFiles();
+          if (hasSongs = files.isNotEmpty) {
+            message = 'Found ${files.length} audio files';
+            // Update the audio provider with the new playlist
             _audioProvider.setPlaylist(
               files.map((file) => Song.fromFile(file.path)).toList(),
             );
           }
         }
+        await songProvider.loadSongs();
       }
 
       // Update UI
@@ -303,54 +301,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
     }
   }
 
-  Future<List<File>> _scanAndLoadSongs(SongProvider songProvider) async {
-    try {
-      final files = await _audioScanner.scanForAudioFiles();
-      if (files.isNotEmpty && mounted) {
-        await songProvider.loadSongs();
-      }
-      return files;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in _scanAndLoadSongs: $e');
-      }
-      rethrow;
-    }
-  }
-
-  Future<List<File>> _tryAutoScan(SongProvider songProvider) async {
-    try {
-      // Try auto-scanning common folders
-      final folders = await _audioScanner.autoScanForAudioFolders();
-      if (folders.isNotEmpty) {
-        // Try to get files from the first found folder
-        final files = await _audioScanner.getAudioFilesFromFolder(
-          folders.first.path,
-        );
-        if (files.isNotEmpty) {
-          await songProvider.loadSongs();
-          if (songProvider.songs.isNotEmpty) {
-            if (mounted) {
-              Helper.showSnackBar(
-                context,
-                'Found ${files.length} audio files in ${folders.first.name}',
-              );
-            }
-            return files;
-          }
-        }
-      }
-
-      // Fall back to manual scan if auto-scan finds no files
-      return await _scanAndLoadSongs(songProvider);
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in _tryAutoScan: $e');
-      }
-      rethrow;
-    }
-  }
-
   Future<void> _scanForFolders({bool forceRescan = false}) async {
     final hasPermission = await PermissionHelper.requestStoragePermission(
       context,
@@ -364,24 +314,9 @@ class PlaylistScreenState extends State<PlaylistScreen>
     });
 
     try {
-      List<AudioFolder> folders;
-
-      if (!forceRescan) {
-        // Try auto-scanning common folders first
-        folders = await _audioScanner.autoScanForAudioFolders();
-        if (folders.isNotEmpty) {
-          setState(() => _audioFolders = folders);
-          return;
-        }
-      }
-
-      folders = await _audioScanner.scanForAudioFolders();
-
-      if (folders.isNotEmpty) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_cachedFolderPathKey, folders.first.path);
-      }
-
+      final folders = await _audioScanner.scanAudioFolders(
+        forceRescan: forceRescan,
+      );
       setState(() => _audioFolders = folders);
     } catch (e) {
       if (mounted) {
@@ -456,6 +391,28 @@ class PlaylistScreenState extends State<PlaylistScreen>
     }
   }
 
+  Future<void> _openFolderPicker() async {
+    final result = await _audioScanner.clearCachedFolders();
+    if (result) {
+      await _scanForFolders(forceRescan: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cache cleared and folders refreshed'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to clear cache'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -489,7 +446,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    // Playlist Tab
+                    // Songs Tab
                     _songs.isEmpty
                         ? Center(
                             child: Column(
@@ -699,27 +656,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                     color: Colors.grey.shade600,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Try adding music to Music or Downloads folder',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 24),
-                                ElevatedButton.icon(
-                                  onPressed: _scanForFolders,
-                                  icon: const Icon(Icons.folder_open_rounded),
-                                  label: const Text('Browse Folders'),
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                ),
                               ],
                             ),
                           )
@@ -732,15 +668,14 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                       MainAxisAlignment.spaceEvenly,
                                   children: [
                                     TextButton.icon(
-                                      onPressed: () =>
-                                          _scanForFolders(forceRescan: true),
+                                      onPressed: () => _openFolderPicker(),
                                       icon: const Icon(
-                                        Icons.folder_copy,
+                                        Icons.create_new_folder_outlined,
                                         size: 20,
                                         color: Colors.black,
                                       ),
                                       label: const Text(
-                                        'open',
+                                        'Open Folders',
                                         style: TextStyle(color: Colors.black),
                                       ),
                                     ),
