@@ -257,6 +257,14 @@ class AudioProvider with ChangeNotifier {
     }
   }
 
+  void clearCurrentSong() {
+    _currentSong = null;
+    _position = Duration.zero;
+    _duration = Duration.zero;
+    _isPlaying = false;
+    notifyListeners();
+  }
+
   void setPlaylist(List<Song> songs) {
     _playlist = List.from(songs);
     notifyListeners();

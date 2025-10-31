@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:playermusic1/services/audio_scanner_service.dart';
 import '../models/song.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
@@ -13,9 +14,11 @@ class SongProvider with ChangeNotifier {
   String? _error;
   // AudioProvider will be injected through constructor
   final AudioProvider _audioProvider;
+  final AudioScannerService _audioScanner;
 
   SongProvider({required AudioProvider audioProvider})
-    : _audioProvider = audioProvider;
+    : _audioProvider = audioProvider,
+      _audioScanner = AudioScannerService();
 
   List<Song> get songs => List.unmodifiable(_songs);
   List<Song> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
@@ -69,9 +72,14 @@ class SongProvider with ChangeNotifier {
     try {
       // Clear the playlist in AudioProvider
       _audioProvider.setPlaylist([]);
+      _audioProvider.clearCurrentSong();
+      _audioProvider.stop();
       // Reload songs (which will be empty now)
-      await loadSongs();
-      return true;
+      final clearCache = await _audioScanner.clearCachedFile();
+      if (clearCache) {
+        await loadSongs();
+      }
+      return clearCache;
     } catch (e) {
       _error = 'Failed to clear cache: $e';
       return false;

@@ -9,11 +9,7 @@ class EqualizerBand {
     required this.label,
   });
 
-  EqualizerBand copyWith({
-    int? frequency,
-    double? gain,
-    String? label,
-  }) {
+  EqualizerBand copyWith({int? frequency, double? gain, String? label}) {
     return EqualizerBand(
       frequency: frequency ?? this.frequency,
       gain: gain ?? this.gain,
@@ -22,11 +18,7 @@ class EqualizerBand {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'frequency': frequency,
-      'gain': gain,
-      'label': label,
-    };
+    return {'frequency': frequency, 'gain': gain, 'label': label};
   }
 
   factory EqualizerBand.fromJson(Map<String, dynamic> json) {
@@ -73,7 +65,10 @@ class EqualizerPreset {
     return EqualizerPreset(
       name: json['name'] as String,
       bands: (json['bands'] as List)
-          .map((bandJson) => EqualizerBand.fromJson(bandJson as Map<String, dynamic>))
+          .map(
+            (bandJson) =>
+                EqualizerBand.fromJson(bandJson as Map<String, dynamic>),
+          )
           .toList(),
       isCustom: json['isCustom'] as bool? ?? false,
     );
@@ -114,9 +109,14 @@ class EqualizerSettings {
   factory EqualizerSettings.fromJson(Map<String, dynamic> json) {
     return EqualizerSettings(
       isEnabled: json['isEnabled'] as bool,
-      currentPreset: EqualizerPreset.fromJson(json['currentPreset'] as Map<String, dynamic>),
+      currentPreset: EqualizerPreset.fromJson(
+        json['currentPreset'] as Map<String, dynamic>,
+      ),
       customPresets: (json['customPresets'] as List)
-          .map((presetJson) => EqualizerPreset.fromJson(presetJson as Map<String, dynamic>))
+          .map(
+            (presetJson) =>
+                EqualizerPreset.fromJson(presetJson as Map<String, dynamic>),
+          )
           .toList(),
     );
   }

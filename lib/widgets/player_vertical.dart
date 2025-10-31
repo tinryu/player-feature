@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:playermusic1/utils/helper.dart';
 import 'package:playermusic1/providers/audio_provider.dart';
 // import 'package:playermusic1/widgets/sleep_timer_dialog.dart';
+import 'rotating_widget.dart';
 
 class PlayerVertical extends StatelessWidget {
   final Duration position;
@@ -178,26 +179,55 @@ class PlayerVertical extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Album art
-          Container(
-            width: 220,
-            height: 220,
-            margin: const EdgeInsets.symmetric(vertical: 20),
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.music_note_outlined,
-              size: 150,
-              color: Colors.redAccent,
-            ),
+          RotatingWidget(
+            isAnimating: audioProvider.isPlaying,
+            duration: Duration(milliseconds: 10000),
+            effect: RotationEffect.clockwise,
+            curve: Curves.fastLinearToSlowEaseIn,
+            child: audioProvider.isPlaying
+                ? Container(
+                    width: 220,
+                    height: 220,
+                    margin: const EdgeInsets.symmetric(vertical: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.cyclone_sharp,
+                      size: 200,
+                      color: Colors.red.shade700,
+                    ),
+                  )
+                : Container(
+                    width: 220,
+                    height: 220,
+                    margin: const EdgeInsets.symmetric(vertical: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      shape: BoxShape.rectangle,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.music_note_rounded,
+                      size: 150,
+                      color: Colors.white,
+                    ),
+                  ),
           ),
           const SizedBox(height: 20),
           // Song title and sleep timer button

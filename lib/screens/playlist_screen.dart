@@ -36,7 +36,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
   late final EqualizerService _equalizerService;
   final AudioScannerService _audioScanner = AudioScannerService();
   late TabController _tabController;
-  late AnimationController _animationController;
+  late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late AnimationController _playerBarAnimationController;
   late Animation<double> _playerBarAnimation;
@@ -87,7 +87,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _fadeController.dispose();
     _playerBarAnimationController.dispose();
     _tabController.dispose();
     _audioProvider.removeListener(_onAudioChange);
@@ -116,13 +116,15 @@ class PlaylistScreenState extends State<PlaylistScreen>
   }
 
   void _initAnimations() {
-    _animationController = AnimationController(
+    _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(_fadeController);
+    _fadeController.forward();
 
     _playerBarAnimationController = AnimationController(
       vsync: this,
@@ -134,8 +136,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
         curve: Curves.easeInOut,
       ),
     );
-
-    _animationController.forward();
   }
 
   void _onAudioChange() {
@@ -179,7 +179,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
       } else {}
 
       // Start fade in animation
-      _animationController.forward();
+      _fadeController.forward();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -511,7 +511,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                                     width: 12,
                                                   ), // Space between icon and text
                                                   Text(
-                                                    'Clear Playlists',
+                                                    'Remove lists',
                                                     style: TextStyle(
                                                       fontSize: 14,
                                                     ),
@@ -543,8 +543,8 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                                   ), // Space between icon and text
                                                   Text(
                                                     _sortAscending
-                                                        ? 'A → Z'
-                                                        : 'Z → A',
+                                                        ? 'Z → A'
+                                                        : 'A → Z',
                                                     style: TextStyle(
                                                       fontSize: 14,
                                                     ),
@@ -582,8 +582,8 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                                 }
 
                                                 return _sortAscending
-                                                    ? comparison
-                                                    : -comparison;
+                                                    ? -comparison
+                                                    : comparison;
                                               });
                                               setState(() {
                                                 _sortAscending =
@@ -662,22 +662,85 @@ class PlaylistScreenState extends State<PlaylistScreen>
                         : Column(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.all(0.0),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8.0,
+                                ),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
+                                  mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
-                                    TextButton.icon(
-                                      onPressed: () => _openFolderPicker(),
-                                      icon: const Icon(
-                                        Icons.create_new_folder_outlined,
-                                        size: 20,
-                                        color: Colors.black,
+                                    PopupMenuButton<String>(
+                                      elevation: 2,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      label: const Text(
-                                        'Open Folders',
-                                        style: TextStyle(color: Colors.black),
-                                      ),
+                                      padding: EdgeInsets.zero,
+                                      menuPadding: EdgeInsets.all(5),
+                                      itemBuilder: (context) => [
+                                        PopupMenuItem(
+                                          value: 'open_folder',
+                                          height:
+                                              40, // Fixed height for consistent item size
+                                          onTap: _openFolderPicker,
+                                          child: SizedBox(
+                                            width: double
+                                                .infinity, // Make the item take full width
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.create_new_folder_sharp,
+                                                  size: 20,
+                                                ),
+                                                const SizedBox(
+                                                  width: 12,
+                                                ), // Space between icon and text
+                                                Text(
+                                                  'Open folder',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        const PopupMenuDivider(
+                                          thickness: 0.3,
+                                          height: 0.5,
+                                          color: Colors.grey,
+                                        ), // Divider between items
+                                        PopupMenuItem(
+                                          value: 'sort',
+                                          height:
+                                              40, // Same height as other items
+                                          child: SizedBox(
+                                            width:
+                                                double.infinity, // Full width
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.swap_vert_rounded,
+                                                  size: 20,
+                                                ),
+                                                const SizedBox(
+                                                  width: 12,
+                                                ), // Space between icon and text
+                                                Text(
+                                                  _sortAscending
+                                                      ? 'Z → A'
+                                                      : 'A → Z',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          onTap: () {},
+                                        ),
+                                      ],
+                                      icon: Icon(Icons.menu_rounded),
+                                      iconSize: 24,
+                                      position: PopupMenuPosition.under,
                                     ),
                                   ],
                                 ),

@@ -12,13 +12,13 @@ class PermissionHelper {
     // For Android 13+ (API 33+), use audio permission
     // For older versions, use storage permission
     PermissionStatus status;
-    
+
     // Try audio permission first (Android 13+)
     status = await Permission.audio.status;
     if (status.isDenied) {
       status = await Permission.audio.request();
     }
-    
+
     // If audio permission is not available, try storage (Android 12 and below)
     if (!status.isGranted) {
       status = await Permission.storage.status;
@@ -41,7 +41,9 @@ class PermissionHelper {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Storage permission is required to access music files'),
+            content: Text(
+              'Storage permission is required to access music files',
+            ),
             duration: Duration(seconds: 3),
           ),
         );
@@ -99,26 +101,27 @@ class PermissionHelper {
   /// Show permission rationale before requesting
   static Future<bool> showPermissionRationale(BuildContext context) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Storage Access'),
-          content: const Text(
-            'This app needs access to your device storage to find and play music files. '
-            'Your privacy is important - we only access audio files.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Deny'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Allow'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Storage Access'),
+              content: const Text(
+                'This app needs access to your device storage to find and play music files. '
+                'Your privacy is important - we only access audio files.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Deny'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Allow'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
   }
 }

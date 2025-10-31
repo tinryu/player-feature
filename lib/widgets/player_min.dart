@@ -4,8 +4,9 @@ import '../providers/audio_provider.dart';
 import '../screens/detail_screen.dart';
 import '../utils/helper.dart';
 import '../services/equalizer_service.dart';
+import '../widgets/rotating_widget.dart';
 
-class PlayerMinBar extends StatelessWidget {
+class PlayerMinBar extends StatefulWidget {
   final Duration position;
   final Duration duration;
   final Function() onOpenFiles;
@@ -20,9 +21,37 @@ class PlayerMinBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final audioProvider = Provider.of<AudioProvider>(context);
+  State<PlayerMinBar> createState() => _PlayerMinBarState();
+}
 
+class _PlayerMinBarState extends State<PlayerMinBar>
+    with SingleTickerProviderStateMixin {
+  late AudioProvider audioProvider;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    audioProvider = Provider.of<AudioProvider>(context);
+
+    if (!_isInitialized) {
+      _isInitialized = true;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant PlayerMinBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    audioProvider = Provider.of<AudioProvider>(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -31,7 +60,7 @@ class PlayerMinBar extends StatelessWidget {
             pageBuilder: (context, animation, secondaryAnimation) {
               return DetailScreen(
                 animation: animation,
-                equalizerService: equalizerService,
+                equalizerService: widget.equalizerService,
               );
             },
             transitionDuration: const Duration(milliseconds: 300),
@@ -54,32 +83,38 @@ class PlayerMinBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 35,
-                  height: 35,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [Colors.white, Colors.orange.shade400],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+            RotatingWidget(
+              isAnimating: audioProvider.isPlaying,
+              duration: const Duration(seconds: 2),
+              effect: RotationEffect.clockwise,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 35,
+                    height: 35,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Colors.white, Colors.orange.shade400],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                     ),
                   ),
-                ),
-                CircleAvatar(
-                  radius: 15,
-                  backgroundColor: Colors.grey[850],
-                  child: Icon(
-                    Icons.music_note,
-                    color: Colors.white70,
-                    size: 20,
+                  CircleAvatar(
+                    radius: 15,
+                    backgroundColor: Colors.grey[850],
+                    child: Icon(
+                      Icons.music_note,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+
             SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -108,7 +143,7 @@ class PlayerMinBar extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.queue_music_rounded, color: Colors.white),
-              onPressed: onOpenFiles,
+              onPressed: widget.onOpenFiles,
             ),
             SizedBox(width: 5),
             // Sleep timer countdown or equalizer icon

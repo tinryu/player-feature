@@ -90,9 +90,11 @@ class DetailScreen extends StatelessWidget {
                     //     // Player controls
                     StreamBuilder<Duration>(
                       stream: audioProvider.positionStream,
+                      initialData: audioProvider.position,
                       builder: (context, positionSnapshot) {
                         return StreamBuilder<Duration>(
                           stream: audioProvider.durationStream,
+                          initialData: audioProvider.duration,
                           builder: (context, durationSnapshot) {
                             final duration =
                                 durationSnapshot.data ?? Duration.zero;

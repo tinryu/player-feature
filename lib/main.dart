@@ -24,7 +24,7 @@ void main() {
           create: (context) => SongProvider(
             audioProvider: Provider.of<AudioProvider>(context, listen: false),
           ),
-          update: (context, audioProvider, previous) => 
+          update: (context, audioProvider, previous) =>
               previous ?? SongProvider(audioProvider: audioProvider),
         ),
       ],
