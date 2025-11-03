@@ -8,6 +8,8 @@ class Song {
   final String? genre;
   final int? trackNumber;
   final int? year;
+  final bool isOnline;
+  final String? onlineId;
   DateTime lastPlayed;
 
   Song({
@@ -20,6 +22,8 @@ class Song {
     this.genre,
     this.trackNumber,
     this.year,
+    this.isOnline = false,
+    this.onlineId,
     DateTime? lastPlayed,
   }) : duration = duration ?? Duration.zero,
        lastPlayed = lastPlayed ?? DateTime.now();
@@ -34,6 +38,8 @@ class Song {
     String? genre,
     int? trackNumber,
     int? year,
+    bool? isOnline,
+    String? onlineId,
     DateTime? lastPlayed,
   }) {
     return Song(
@@ -46,6 +52,8 @@ class Song {
       genre: genre ?? this.genre,
       trackNumber: trackNumber ?? this.trackNumber,
       year: year ?? this.year,
+      isOnline: isOnline ?? this.isOnline,
+      onlineId: onlineId ?? this.onlineId,
       lastPlayed: lastPlayed ?? this.lastPlayed,
     );
   }
@@ -75,6 +83,8 @@ class Song {
       'genre': genre,
       'trackNumber': trackNumber,
       'year': year,
+      'isOnline': isOnline,
+      'onlineId': onlineId,
       'lastPlayed': lastPlayed.toIso8601String(),
     };
   }
@@ -91,6 +101,8 @@ class Song {
       genre: json['genre'] as String?,
       trackNumber: json['trackNumber'] as int?,
       year: json['year'] as int?,
+      isOnline: json['isOnline'] as bool? ?? false,
+      onlineId: json['onlineId'] as String?,
       lastPlayed: json['lastPlayed'] != null
           ? DateTime.parse(json['lastPlayed'] as String)
           : DateTime.now(),

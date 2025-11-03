@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:playermusic1/services/audio_scanner_service.dart';
+import 'package:playermusic1/services/nct_service.dart';
 import '../models/song.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
@@ -15,10 +16,17 @@ class SongProvider with ChangeNotifier {
   // AudioProvider will be injected through constructor
   final AudioProvider _audioProvider;
   final AudioScannerService _audioScanner;
+  final NCTService _nctService;
+  bool _isSearchingOnline = false;
+  List<Song> _onlineSearchResults = [];
 
-  SongProvider({required AudioProvider audioProvider})
+  bool get isSearchingOnline => _isSearchingOnline;
+  List<Song> get onlineSearchResults => List.unmodifiable(_onlineSearchResults);
+
+  SongProvider({required AudioProvider audioProvider, NCTService? nctService})
     : _audioProvider = audioProvider,
-      _audioScanner = AudioScannerService();
+      _audioScanner = AudioScannerService(),
+      _nctService = nctService ?? NCTService();
 
   List<Song> get songs => List.unmodifiable(_songs);
   List<Song> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
@@ -61,6 +69,33 @@ class SongProvider with ChangeNotifier {
           song.artist.toLowerCase().contains(queryLower) ||
           song.album.toLowerCase().contains(queryLower);
     }).toList();
+  }
+
+  Future<void> searchOnlineSongs(String query) async {
+    if (query.isEmpty) {
+      _onlineSearchResults = [];
+      notifyListeners();
+      return;
+    }
+
+    _isSearchingOnline = true;
+    notifyListeners();
+
+    try {
+      _onlineSearchResults = await _nctService.searchSongs(query);
+    } catch (e) {
+      _error = 'Failed to search online: $e';
+      _onlineSearchResults = [];
+    } finally {
+      _isSearchingOnline = false;
+      notifyListeners();
+    }
+  }
+
+  void clearOnlineSearch() {
+    _onlineSearchResults = [];
+    _isSearchingOnline = false;
+    notifyListeners();
   }
 
   /// Clears the cache and refreshes the song list

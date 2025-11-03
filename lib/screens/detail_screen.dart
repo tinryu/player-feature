@@ -67,18 +67,18 @@ class DetailScreen extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
+                    SizedBox(height: 50),
                     GestureDetector(
                       onVerticalDragEnd: (details) {
-                        if (details.primaryVelocity! > 0) {
-                          Navigator.of(context).pop();
-                        }
+                        Navigator.of(context).pop();
                       },
+
                       child: Container(
                         height: 40,
                         alignment: Alignment.center,
                         child: Container(
                           width: 40,
-                          height: 4,
+                          height: 5,
                           decoration: BoxDecoration(
                             color: Colors.grey[300],
                             borderRadius: BorderRadius.circular(2),

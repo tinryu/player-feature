@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.playermusic1"
-        minSdk = 21  // Required for modern audio features
+        minSdk = flutter.minSdkVersion  // Required for modern audio features
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName

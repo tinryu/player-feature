@@ -128,10 +128,6 @@ class _SongListWidgetState extends State<SongListWidget> {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Text(
-        Helper.formatDuration(song.duration),
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
       onTap: () => widget.onSongSelected(song),
     );
   }

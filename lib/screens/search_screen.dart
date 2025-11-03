@@ -13,21 +13,36 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  List<Song> _searchResults = [];
+  List<Song> _localSearchResults = [];
   Timer? _debounce;
   bool _isSearching = false;
+  late TabController _tabController;
+  bool _showOnlineResults = false;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabSelection);
+
     // Load songs if not already loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final songProvider = context.read<SongProvider>();
       if (songProvider.songs.isEmpty) {
         songProvider.loadSongs();
+      }
+    });
+  }
+
+  void _handleTabSelection() {
+    setState(() {
+      _showOnlineResults = _tabController.index == 1;
+      if (_searchController.text.isNotEmpty) {
+        _performSearch(_searchController.text);
       }
     });
   }
@@ -38,9 +53,10 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (query.isEmpty) {
       setState(() {
-        _searchResults = [];
+        _localSearchResults = [];
         _isSearching = false;
       });
+      context.read<SongProvider>().clearOnlineSearch();
       return;
     }
 
@@ -48,15 +64,25 @@ class _SearchScreenState extends State<SearchScreen> {
       _isSearching = true;
     });
 
-    // Set up debounce timer (300ms)
-    _debounce = Timer(const Duration(milliseconds: 300), () {
+    // Set up debounce timer (500ms for online search)
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
       if (!mounted) return;
 
       final songProvider = context.read<SongProvider>();
-      setState(() {
-        _searchResults = songProvider.searchSongs(query);
-        _isSearching = false;
-      });
+
+      // Always search local songs
+      _localSearchResults = songProvider.searchSongs(query);
+
+      // Search online if in online tab or if local results are empty
+      // if (_tabController.index == 1 || _localSearchResults.isEmpty) {
+      //   await songProvider.searchOnlineSongs(query);
+      // }
+
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+      }
     });
   }
 
@@ -65,6 +91,8 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _tabController.removeListener(_handleTabSelection);
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -120,7 +148,7 @@ class _SearchScreenState extends State<SearchScreen> {
       appBar: AppBar(
         titleSpacing: 0,
         title: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest.withValues(
               alpha: 0.5,
@@ -155,12 +183,30 @@ class _SearchScreenState extends State<SearchScreen> {
             onChanged: _performSearch,
           ),
         ),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Local'),
+            Tab(text: 'Online'),
+          ],
+          indicatorColor: theme.colorScheme.primary,
+          labelColor: theme.colorScheme.primary,
+          unselectedLabelColor: theme.hintColor,
+        ),
       ),
       body: _buildSearchResults(),
     );
   }
 
   Widget _buildSearchResults() {
+    final songProvider = Provider.of<SongProvider>(context);
+    final results = _showOnlineResults
+        ? songProvider.onlineSearchResults
+        : _localSearchResults;
+    final bool isLoading = _showOnlineResults
+        ? songProvider.isSearchingOnline
+        : _isSearching;
+
     if (_searchController.text.isEmpty) {
       return Center(
         child: Column(
@@ -192,11 +238,11 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
-    if (_isSearching) {
+    if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_searchResults.isEmpty) {
+    if (results.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -235,9 +281,9 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     return ListView.builder(
-      itemCount: _searchResults.length,
+      itemCount: results.length,
       itemBuilder: (context, index) {
-        final song = _searchResults[index];
+        final song = results[index];
         return ListTile(
           leading: const Icon(Icons.music_note, size: 36),
           tileColor: Theme.of(

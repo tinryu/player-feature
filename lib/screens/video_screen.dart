@@ -318,7 +318,7 @@ class _VideoScreenState extends State<VideoScreen> {
                     size: 30,
                   ),
                   label: Text(
-                    'Folder',
+                    'Videos',
                     style: TextStyle(color: Theme.of(context).primaryColor),
                   ),
                 ),

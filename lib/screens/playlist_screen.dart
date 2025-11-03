@@ -429,6 +429,12 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                     color: Colors.grey.shade600,
                                   ),
                                 ),
+                                TextButton(
+                                  onPressed: () {
+                                    _openFolderPicker();
+                                  },
+                                  child: const Text('Open Folders'),
+                                ),
                               ],
                             ),
                           )
