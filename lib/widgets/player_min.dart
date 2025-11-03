@@ -9,14 +9,14 @@ import '../widgets/rotating_widget.dart';
 class PlayerMinBar extends StatefulWidget {
   final Duration position;
   final Duration duration;
-  final Function() onOpenFiles;
+  // final Function() onOpenFiles;
   final EqualizerService equalizerService;
 
   const PlayerMinBar({
     super.key,
     required this.position,
     required this.duration,
-    required this.onOpenFiles,
+    // required this.onOpenFiles,
     required this.equalizerService,
   });
 
@@ -141,9 +141,19 @@ class _PlayerMinBarState extends State<PlayerMinBar>
               icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
               onPressed: audioProvider.next,
             ),
+            // IconButton(
+            //   icon: const Icon(Icons.queue_music_rounded, color: Colors.white),
+            //   onPressed: widget.onOpenFiles,
+            // ),
             IconButton(
-              icon: const Icon(Icons.queue_music_rounded, color: Colors.white),
-              onPressed: widget.onOpenFiles,
+              icon: Icon(
+                audioProvider.isMuted
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_up_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
+              onPressed: audioProvider.toggleMute,
             ),
             SizedBox(width: 5),
             // Sleep timer countdown or equalizer icon

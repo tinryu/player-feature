@@ -1,8 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:async';
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../widgets/player_min.dart';
@@ -34,6 +32,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
     with TickerProviderStateMixin {
   late final AudioProvider _audioProvider;
   late final EqualizerService _equalizerService;
+
   final AudioScannerService _audioScanner = AudioScannerService();
   late TabController _tabController;
   late AnimationController _fadeController;
@@ -45,10 +44,27 @@ class PlaylistScreenState extends State<PlaylistScreen>
   bool _isPlayerBarVisible = false;
   bool _isLoadingFolders = false;
   bool get isPlayerBarVisible => _isPlayerBarVisible;
-  List<Song> get _songs => context.watch<SongProvider>().songs;
-  List<Song> get _recentlyPlayed =>
-      context.watch<SongProvider>().recentlyPlayed;
+  List<Song> _getSongs(BuildContext context, {bool listen = true}) {
+    if (listen) {
+      return context.watch<SongProvider>().songs;
+    } else {
+      return context.read<SongProvider>().songs;
+    }
+  }
+
+  List<Song> _getRecentlyPlayed(BuildContext context, {bool listen = true}) {
+    if (listen) {
+      return context.watch<SongProvider>().recentlyPlayed;
+    } else {
+      return context.read<SongProvider>().recentlyPlayed;
+    }
+  }
+
   List<AudioFolder> _audioFolders = [];
+
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+  List<Song> _filteredSongs = [];
 
   void showPlayerBar() {
     if (!mounted) return;
@@ -138,18 +154,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
     );
   }
 
-  void _onAudioChange() {
-    if (mounted) {
-      setState(() {
-        _currentSong = _audioProvider.currentSong;
-        if (_currentSong != null && !_isPlayerBarVisible) {
-          _isPlayerBarVisible = true;
-          _playerBarAnimationController.forward();
-        }
-      });
-    }
-  }
-
   Future<void> _initAudioService() async {
     try {
       // Request storage permission
@@ -176,8 +180,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
 
       if (songProvider.songs.isEmpty) {
         await songProvider.loadSongs();
-      } else {}
-
+      }
       // Start fade in animation
       _fadeController.forward();
     } catch (e) {
@@ -190,6 +193,35 @@ class PlaylistScreenState extends State<PlaylistScreen>
         );
       }
     }
+  }
+
+  void _onAudioChange() {
+    if (mounted) {
+      setState(() {
+        _currentSong = _audioProvider.currentSong;
+        if (_currentSong != null && !_isPlayerBarVisible) {
+          _isPlayerBarVisible = true;
+          _playerBarAnimationController.forward();
+        }
+      });
+    }
+  }
+
+  void _filterSongs(String query, BuildContext context) {
+    setState(() {
+      if (query.isEmpty) {
+        _isSearching = false;
+        _filteredSongs = [];
+      } else {
+        _isSearching = true;
+        _filteredSongs = _getSongs(context, listen: false).where((song) {
+          final title = song.title.toLowerCase();
+          final artist = song.artist.toLowerCase();
+          final searchLower = query.toLowerCase();
+          return title.contains(searchLower) || artist.contains(searchLower);
+        }).toList();
+      }
+    });
   }
 
   Future<void> _showClearCacheDialog() async {
@@ -230,77 +262,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
     }
   }
 
-  Future<void> _scanForAudioFiles({bool forceRescan = false}) async {
-    if (!mounted) return;
-    // Request storage permission
-    final hasPermission = await PermissionHelper.requestStoragePermission(
-      context,
-    );
-    if (!hasPermission) {
-      setState(() => _isLoadingFolders = false);
-      return;
-    }
-
-    // Set loading state
-    setState(() => _isLoadingFolders = true);
-
-    try {
-      final songProvider = context.read<SongProvider>();
-      final cachedFiles = await _audioScanner.getCachedFiles();
-      List<File> files = [];
-      bool hasSongs = false;
-      String? message;
-
-      if (forceRescan) {
-        if (cachedFiles != null && cachedFiles.isNotEmpty) {
-          files = cachedFiles;
-          if (hasSongs = files.isNotEmpty) {
-            message = 'Loaded ${files.length} audio files from cache';
-            _audioProvider.setPlaylist(
-              files.map((file) => Song.fromFile(file.path)).toList(),
-            );
-          }
-        } else {
-          // Force rescan and update cache
-          final files = await _audioScanner.scanForAudioFiles();
-          if (hasSongs = files.isNotEmpty) {
-            message = 'Found ${files.length} audio files';
-            // Update the audio provider with the new playlist
-            _audioProvider.setPlaylist(
-              files.map((file) => Song.fromFile(file.path)).toList(),
-            );
-          }
-        }
-        await songProvider.loadSongs();
-      }
-
-      // Update UI
-      if (mounted) {
-        setState(() {
-          _isLoadingFolders = false;
-          // The playlist will be updated automatically through the provider
-        });
-
-        // Show appropriate message
-        if (message != null && mounted) {
-          Helper.showSnackBar(context, message);
-        } else if (!hasSongs && mounted) {
-          Helper.showSnackBar(
-            context,
-            'No audio files found. Please check your storage permissions and try again.',
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingFolders = false;
-        });
-        Helper.showSnackBar(context, 'Error scanning for audio files: $e');
-      }
-    }
-  }
-
   Future<void> _scanForFolders({bool forceRescan = false}) async {
     final hasPermission = await PermissionHelper.requestStoragePermission(
       context,
@@ -337,14 +298,19 @@ class PlaylistScreenState extends State<PlaylistScreen>
       if (files.isNotEmpty) {
         final songs = files.map((file) => Song.fromFile(file.path)).toList();
         _audioProvider.addSongs(songs);
+
         if (mounted) {
           final songProvider = context.read<SongProvider>();
           await songProvider.loadSongs();
           if (mounted) {
-            Helper.showSnackBar(
-              context,
-              'Added ${files.length} song${files.length > 1 ? 's' : ''} from ${folder.name}',
-            );
+            if (_tabController.length > 1) {
+              _tabController.animateTo(
+                1,
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.fastOutSlowIn,
+              );
+              _playSong(songs.first);
+            }
           }
         }
       }
@@ -364,31 +330,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
 
     final songProvider = context.read<SongProvider>();
     songProvider.addToRecentlyPlayed(song);
-  }
-
-  Future<void> _pickAndAddFiles() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        allowMultiple: true,
-      );
-
-      if (result != null) {
-        final songProvider = context.read<SongProvider>();
-        final newSongs = await songProvider.addSongsFromFiles(result.files);
-
-        if (newSongs.isNotEmpty) {
-          _audioProvider.setPlaylist(newSongs);
-          _playSong(newSongs.first);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error adding files: $e')));
-      }
-    }
   }
 
   Future<void> _openFolderPicker() async {
@@ -415,6 +356,8 @@ class PlaylistScreenState extends State<PlaylistScreen>
 
   @override
   Widget build(BuildContext context) {
+    final songs = _getSongs(context);
+    final recentlyPlayed = _getRecentlyPlayed(context);
     return Scaffold(
       body: Stack(
         children: [
@@ -435,10 +378,14 @@ class PlaylistScreenState extends State<PlaylistScreen>
                   unselectedLabelColor: Colors.grey.shade600,
                   indicatorColor: Theme.of(context).colorScheme.onSurface,
                   indicatorPadding: EdgeInsets.zero,
+                  indicatorWeight: 2,
+                  indicatorSize: TabBarIndicatorSize.tab,
+
+                  dividerColor: Colors.grey.withValues(alpha: 0.2),
                   tabs: const [
-                    Tab(text: 'Songs'),
-                    Tab(text: 'Recent Played'),
-                    Tab(text: 'Folder'),
+                    Tab(icon: Icon(Icons.folder_rounded)),
+                    Tab(icon: Icon(Icons.queue_music_rounded)),
+                    Tab(icon: Icon(Icons.recent_actors_rounded)),
                   ],
                 ),
               ),
@@ -446,20 +393,173 @@ class PlaylistScreenState extends State<PlaylistScreen>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    // Songs Tab
-                    _songs.isEmpty
+                    // Folder Tab
+                    _isLoadingFolders
                         ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Text('No songs in playlist'),
+                                const CircularProgressIndicator(),
                                 const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () =>
-                                      _scanForAudioFiles(forceRescan: true),
-                                  child: const Text('Scan for Audio Files'),
+                                Text(
+                                  'Scanning for audio folders...',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade600,
+                                  ),
                                 ),
                               ],
+                            ),
+                          )
+                        : _audioFolders.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.folder_off_rounded,
+                                  size: 80,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No audio folders found',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12.0,
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Theme.of(
+                                          context,
+                                        ).dividerColor.withValues(alpha: 0.2),
+                                        width: 1,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      PopupMenuButton<String>(
+                                        elevation: 2,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        menuPadding: EdgeInsets.all(5),
+                                        itemBuilder: (context) => [
+                                          PopupMenuItem(
+                                            value: 'open_folder',
+                                            height:
+                                                40, // Fixed height for consistent item size
+                                            onTap: _openFolderPicker,
+                                            child: SizedBox(
+                                              width: double
+                                                  .infinity, // Make the item take full width
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons
+                                                        .create_new_folder_sharp,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(
+                                                    width: 12,
+                                                  ), // Space between icon and text
+                                                  Text(
+                                                    'Open folder',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          PopupMenuDivider(
+                                            thickness: 0.3,
+                                            height: 0.5,
+                                            color: Colors.grey,
+                                          ), // Divider between items
+                                          PopupMenuItem(
+                                            value: 'sort',
+                                            height:
+                                                40, // Same height as other items
+                                            child: SizedBox(
+                                              width:
+                                                  double.infinity, // Full width
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.swap_vert_rounded,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Text(
+                                                    _sortAscending
+                                                        ? 'Z → A'
+                                                        : 'A → Z',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                _sortAscending =
+                                                    !_sortAscending;
+                                                // Sort the folders list
+                                                _audioFolders.sort((a, b) {
+                                                  final nameA = a.name
+                                                      .toLowerCase();
+                                                  final nameB = b.name
+                                                      .toLowerCase();
+                                                  return _sortAscending
+                                                      ? nameA.compareTo(nameB)
+                                                      : nameB.compareTo(nameA);
+                                                });
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                        icon: Icon(Icons.menu_rounded),
+                                        iconSize: 24,
+                                        position: PopupMenuPosition.under,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: FolderListWidget(
+                                  folders: _audioFolders,
+                                  onFolderTap: _onFolderTap,
+                                ),
+                              ),
+                            ],
+                          ),
+                    // PlayList Tab
+                    songs.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [const Text('No songs in playlist')],
                             ),
                           )
                         : Column(
@@ -475,14 +575,53 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                       bottom: BorderSide(
                                         color: Theme.of(
                                           context,
-                                        ).dividerColor.withValues(alpha: 0.5),
+                                        ).dividerColor.withValues(alpha: 0.2),
                                         width: 1,
                                       ),
                                     ),
                                   ),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
                                     children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _searchController,
+                                          onChanged: (value) =>
+                                              _filterSongs(value, context),
+                                          decoration: InputDecoration(
+                                            hintText: 'Search songs...',
+                                            prefixIcon: const Icon(
+                                              Icons.search,
+                                            ),
+                                            suffixIcon: _isSearching
+                                                ? IconButton(
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                    ),
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _searchController
+                                                            .clear();
+                                                        _isSearching = false;
+                                                        _filteredSongs = [];
+                                                      });
+                                                    },
+                                                  )
+                                                : null,
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10.0),
+                                              borderSide: BorderSide.none,
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  vertical: 8,
+                                                ),
+                                            isDense: true,
+                                          ),
+                                        ),
+                                      ),
                                       PopupMenuButton<String>(
                                         elevation: 2,
                                         shape: RoundedRectangleBorder(
@@ -520,7 +659,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                               ),
                                             ),
                                           ),
-                                          const PopupMenuDivider(
+                                          PopupMenuDivider(
                                             thickness: 0.3,
                                             height: 0.5,
                                             color: Colors.grey,
@@ -600,158 +739,33 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                   ),
                                 ),
                               ),
-
                               Expanded(
-                                child: SongListWidget(
-                                  songs: _songs,
-                                  onSongSelected: _playSong,
-                                  fadeAnimation: _fadeAnimation,
-                                  currentSong: _currentSong,
+                                child: Consumer<SongProvider>(
+                                  builder: (context, songProvider, _) {
+                                    return SongListWidget(
+                                      key: ValueKey(
+                                        'songs_${songProvider.songs.length}',
+                                      ),
+                                      songs: _isSearching
+                                          ? _filteredSongs
+                                          : songProvider.songs,
+                                      onSongSelected: _playSong,
+                                      fadeAnimation: _fadeAnimation,
+                                      currentSong: _currentSong,
+                                    );
+                                  },
                                 ),
                               ),
                             ],
                           ),
                     // Recently Played Tab
-                    _recentlyPlayed.isEmpty
+                    recentlyPlayed.isEmpty
                         ? Center(child: Text('No recently played tracks'))
                         : SongListWidget(
-                            songs: _recentlyPlayed,
+                            songs: recentlyPlayed,
                             onSongSelected: _playSong,
                             fadeAnimation: _fadeAnimation,
                             currentSong: _currentSong,
-                          ),
-                    // Folder Tab
-                    _isLoadingFolders
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const CircularProgressIndicator(),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Scanning for audio folders...',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : _audioFolders.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.folder_off_rounded,
-                                  size: 80,
-                                  color: Colors.grey.shade400,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No audio folders found',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8.0,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    PopupMenuButton<String>(
-                                      elevation: 2,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      padding: EdgeInsets.zero,
-                                      menuPadding: EdgeInsets.all(5),
-                                      itemBuilder: (context) => [
-                                        PopupMenuItem(
-                                          value: 'open_folder',
-                                          height:
-                                              40, // Fixed height for consistent item size
-                                          onTap: _openFolderPicker,
-                                          child: SizedBox(
-                                            width: double
-                                                .infinity, // Make the item take full width
-                                            child: Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.create_new_folder_sharp,
-                                                  size: 20,
-                                                ),
-                                                const SizedBox(
-                                                  width: 12,
-                                                ), // Space between icon and text
-                                                Text(
-                                                  'Open folder',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        const PopupMenuDivider(
-                                          thickness: 0.3,
-                                          height: 0.5,
-                                          color: Colors.grey,
-                                        ), // Divider between items
-                                        PopupMenuItem(
-                                          value: 'sort',
-                                          height:
-                                              40, // Same height as other items
-                                          child: SizedBox(
-                                            width:
-                                                double.infinity, // Full width
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  Icons.swap_vert_rounded,
-                                                  size: 20,
-                                                ),
-                                                const SizedBox(
-                                                  width: 12,
-                                                ), // Space between icon and text
-                                                Text(
-                                                  _sortAscending
-                                                      ? 'Z → A'
-                                                      : 'A → Z',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          onTap: () {},
-                                        ),
-                                      ],
-                                      icon: Icon(Icons.menu_rounded),
-                                      iconSize: 24,
-                                      position: PopupMenuPosition.under,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: FolderListWidget(
-                                  folders: _audioFolders,
-                                  onFolderTap: _onFolderTap,
-                                ),
-                              ),
-                            ],
                           ),
                   ],
                 ),
@@ -790,7 +804,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
                               return PlayerMinBar(
                                 position: position,
                                 duration: duration,
-                                onOpenFiles: _pickAndAddFiles,
+                                // onOpenFiles: _pickAndAddFiles,
                                 equalizerService: _equalizerService,
                               );
                             },

@@ -130,23 +130,33 @@ class _HomeScreenState extends State<HomeScreen> {
               selectedIndex: _selectedIndex,
               onDestinationSelected: _onItemTapped,
               backgroundColor: Colors.transparent,
+              indicatorColor: Colors.transparent,
               elevation: 0,
-              height: 60,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              height: 50,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home_rounded),
+                  selectedIcon: Icon(
+                    Icons.home_rounded,
+                    color: Colors.redAccent,
+                  ),
                   label: 'Home',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.explore_outlined),
-                  selectedIcon: Icon(Icons.explore_rounded),
+                  selectedIcon: Icon(
+                    Icons.explore_rounded,
+                    color: Colors.redAccent,
+                  ),
                   label: 'Explore',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.search_outlined),
-                  selectedIcon: Icon(Icons.search_rounded),
+                  selectedIcon: Icon(
+                    Icons.search_rounded,
+                    color: Colors.redAccent,
+                  ),
                   label: 'Search',
                 ),
               ],

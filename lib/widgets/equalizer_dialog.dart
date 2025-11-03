@@ -141,7 +141,6 @@ class _EqualizerDialogState extends State<EqualizerDialog> {
             onChanged: (value) {
               widget.equalizerService.setEnabled(value);
             },
-            activeColor: Colors.redAccent,
             activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
             inactiveThumbColor: Colors.white70,
             inactiveTrackColor: Colors.white.withValues(alpha: 0.1),

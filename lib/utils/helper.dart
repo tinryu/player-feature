@@ -95,3 +95,99 @@ class Helper {
     return '${(bytes / pow(1024, i)).toStringAsFixed(decimals)} ${suffixes[i]}';
   }
 }
+
+ // Future<void> _scanForAudioFiles({bool forceRescan = false}) async {
+  //   if (!mounted) return;
+  //   // Request storage permission
+  //   final hasPermission = await PermissionHelper.requestStoragePermission(
+  //     context,
+  //   );
+  //   if (!hasPermission) {
+  //     setState(() => _isLoadingFolders = false);
+  //     return;
+  //   }
+
+  //   // Set loading state
+  //   setState(() => _isLoadingFolders = true);
+
+  //   try {
+  //     final songProvider = context.read<SongProvider>();
+  //     final cachedFiles = await _audioScanner.getCachedFiles();
+  //     List<File> files = [];
+  //     bool hasSongs = false;
+  //     String? message;
+
+  //     if (forceRescan) {
+  //       if (cachedFiles != null && cachedFiles.isNotEmpty) {
+  //         files = cachedFiles;
+  //         if (hasSongs = files.isNotEmpty) {
+  //           message = 'Loaded ${files.length} audio files from cache';
+  //           _audioProvider.setPlaylist(
+  //             files.map((file) => Song.fromFile(file.path)).toList(),
+  //           );
+  //         }
+  //       } else {
+  //         // Force rescan and update cache
+  //         final files = await _audioScanner.scanForAudioFiles();
+  //         if (hasSongs = files.isNotEmpty) {
+  //           message = 'Found ${files.length} audio files';
+  //           // Update the audio provider with the new playlist
+  //           _audioProvider.setPlaylist(
+  //             files.map((file) => Song.fromFile(file.path)).toList(),
+  //           );
+  //         }
+  //       }
+  //       await songProvider.loadSongs();
+  //     }
+
+  //     // Update UI
+  //     if (mounted) {
+  //       setState(() {
+  //         _isLoadingFolders = false;
+  //         // The playlist will be updated automatically through the provider
+  //       });
+
+  //       // Show appropriate message
+  //       if (message != null && mounted) {
+  //         Helper.showSnackBar(context, message);
+  //       } else if (!hasSongs && mounted) {
+  //         Helper.showSnackBar(
+  //           context,
+  //           'No audio files found. Please check your storage permissions and try again.',
+  //         );
+  //       }
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       setState(() {
+  //         _isLoadingFolders = false;
+  //       });
+  //       Helper.showSnackBar(context, 'Error scanning for audio files: $e');
+  //     }
+  //   }
+  // }
+  // Future<void> _pickAndAddFiles() async {
+  //   try {
+  //     FilePickerResult? result = await FilePicker.platform.pickFiles(
+  //       type: FileType.audio,
+  //       allowMultiple: true,
+  //     );
+
+  //     if (result != null) {
+  //       final songProvider = context.read<SongProvider>();
+  //       final newSongs = await songProvider.addSongsFromFiles(result.files);
+
+  //       if (newSongs.isNotEmpty) {
+  //         _audioProvider.setPlaylist(newSongs);
+  //         _playSong(newSongs.first);
+  //       }
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(
+  //         context,
+  //       ).showSnackBar(SnackBar(content: Text('Error adding files: $e')));
+  //     }
+  //   }
+  // }
+

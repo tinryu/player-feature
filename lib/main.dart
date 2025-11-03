@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,7 +9,8 @@ import 'package:playermusic1/providers/audio_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
+  // Add this line before runApp
+  GestureBinding.instance.resamplingEnabled = true;
   // This prevents the keyboard error by ensuring proper key event handling
   SystemChannels.keyEvent.setMessageHandler((dynamic message) {
     // Handle key events here if needed

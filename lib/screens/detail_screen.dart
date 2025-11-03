@@ -50,8 +50,7 @@ class DetailScreen extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      // ignore: deprecated_member_use
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, -2),
                     ),
@@ -114,7 +113,7 @@ class DetailScreen extends StatelessWidget {
                                         onPressed: () =>
                                             showMenuBottomSheet(context),
                                         icon: const Icon(
-                                          Icons.more_vert_rounded,
+                                          Icons.settings_rounded,
                                           color: Colors.white,
                                         ),
                                       ),

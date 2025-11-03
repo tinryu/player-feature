@@ -102,19 +102,13 @@ class SongProvider with ChangeNotifier {
   void addToRecentlyPlayed(Song song) {
     // Remove the song if it already exists in the list
     _recentlyPlayed.removeWhere((s) => s.path == song.path);
-
     // Add to the beginning of the list
     _recentlyPlayed.insert(0, song);
-
     // Keep only the last 50 recently played songs
     if (_recentlyPlayed.length > 50) {
       _recentlyPlayed = _recentlyPlayed.sublist(0, 50);
     }
-
     notifyListeners();
-
-    // Here you would typically save to shared preferences or local storage
-    // _saveRecentlyPlayedToPrefs();
   }
 
   /// Adds songs from a list of PlatformFile objects
