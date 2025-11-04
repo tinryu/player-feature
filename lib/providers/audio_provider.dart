@@ -28,7 +28,9 @@ class AudioProvider with ChangeNotifier {
   Duration get position => _position;
   Duration get duration => _duration;
   Song? get currentSong => _currentSong;
-  List<Song> get playlist => _playlist;
+  // List<Song> get playlist => _playlist;
+
+  List<Song> get playList => List.unmodifiable(_playlist);
 
   Stream<Duration> get positionStream => _audioPlayer.onPositionChanged;
   Stream<Duration> get durationStream => _audioPlayer.onDurationChanged;
@@ -41,7 +43,6 @@ class AudioProvider with ChangeNotifier {
   /// Returns the number of new songs added
   int addSongs(List<Song> newSongs) {
     if (newSongs.isEmpty) return 0;
-
     // Filter out duplicates based on path
     final existingPaths = _playlist.map((s) => s.path).toSet();
     final uniqueNewSongs = newSongs
@@ -51,7 +52,6 @@ class AudioProvider with ChangeNotifier {
     if (uniqueNewSongs.isEmpty) return 0;
 
     _playlist.addAll(uniqueNewSongs);
-
     // If no song is currently playing, set the first song as current
     if (_currentSong == null && _playlist.isNotEmpty) {
       _currentSong = _playlist.first;

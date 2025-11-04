@@ -52,10 +52,7 @@ class FolderListWidget extends StatelessWidget {
               '${folder.songCount} song${folder.songCount > 1 ? 's' : ''}',
               style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
             ),
-            trailing: Icon(
-              Icons.chevron_right_rounded,
-              color: Colors.grey.shade400,
-            ),
+            trailing: Icon(Icons.add_rounded, color: Colors.grey.shade400),
             onTap: () => onFolderTap(folder),
           ),
         );

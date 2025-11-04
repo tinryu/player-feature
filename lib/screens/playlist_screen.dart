@@ -196,32 +196,60 @@ class PlaylistScreenState extends State<PlaylistScreen>
   }
 
   void _onAudioChange() {
-    if (mounted) {
+    if (!mounted) return;
+    
+    final newSong = _audioProvider.currentSong;
+    
+    // Only call setState if the current song actually changed
+    // Don't rebuild for play/pause state changes
+    if (_currentSong?.path != newSong?.path) {
       setState(() {
-        _currentSong = _audioProvider.currentSong;
+        _currentSong = newSong;
         if (_currentSong != null && !_isPlayerBarVisible) {
           _isPlayerBarVisible = true;
           _playerBarAnimationController.forward();
         }
       });
+    } else if (newSong != null && !_isPlayerBarVisible) {
+      // Only update player bar visibility without full rebuild
+      setState(() {
+        _isPlayerBarVisible = true;
+      });
+      _playerBarAnimationController.forward();
     }
   }
 
-  void _filterSongs(String query, BuildContext context) {
+  void _filterSongs(String query, BuildContext context) async {
     setState(() {
-      if (query.isEmpty) {
-        _isSearching = false;
-        _filteredSongs = [];
-      } else {
-        _isSearching = true;
-        _filteredSongs = _getSongs(context, listen: false).where((song) {
-          final title = song.title.toLowerCase();
-          final artist = song.artist.toLowerCase();
-          final searchLower = query.toLowerCase();
-          return title.contains(searchLower) || artist.contains(searchLower);
-        }).toList();
-      }
+      _isSearching = query.isNotEmpty;
     });
+
+    if (query.isEmpty) {
+      setState(() {
+        _filteredSongs = [];
+      });
+      return;
+    }
+
+    // Debounce the search to avoid too many rebuilds
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    final songProvider = context.read<SongProvider>();
+    final filtered = songProvider.songs
+        .where(
+          (song) =>
+              song.title.toLowerCase().contains(query.toLowerCase()) ||
+              (song.artist.toLowerCase().contains(query.toLowerCase())),
+        )
+        .toList();
+
+    if (mounted) {
+      setState(() {
+        _filteredSongs = filtered;
+      });
+    }
   }
 
   Future<void> _showClearCacheDialog() async {
@@ -298,7 +326,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
       if (files.isNotEmpty) {
         final songs = files.map((file) => Song.fromFile(file.path)).toList();
         _audioProvider.addSongs(songs);
-
         if (mounted) {
           final songProvider = context.read<SongProvider>();
           await songProvider.loadSongs();
@@ -309,7 +336,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
                 duration: const Duration(milliseconds: 500),
                 curve: Curves.fastOutSlowIn,
               );
-              _playSong(songs.first);
+              // _playSong(songs.first);
             }
           }
         }
@@ -558,6 +585,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                   onFolderTap: _onFolderTap,
                                 ),
                               ),
+                              SizedBox(height: 70),
                             ],
                           ),
                     // PlayList Tab
@@ -588,7 +616,7 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                   ),
                                   child: Row(
                                     mainAxisAlignment:
-                                        MainAxisAlignment.spaceEvenly,
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
                                         child: TextField(
@@ -638,6 +666,15 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                         padding: EdgeInsets.zero,
                                         menuPadding: EdgeInsets.all(5),
                                         itemBuilder: (context) => [
+                                          PopupMenuItem(
+                                            value: 'playlist_count',
+                                            height:
+                                                40, // Fixed height for consistent item size
+                                            child: Text(
+                                              '${songs.length} songs',
+                                            ),
+                                          ),
+                                          PopupMenuDivider(),
                                           PopupMenuItem(
                                             value: 'clear_cache',
                                             height:
@@ -746,22 +783,37 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                 ),
                               ),
                               Expanded(
-                                child: Consumer<SongProvider>(
-                                  builder: (context, songProvider, _) {
-                                    return SongListWidget(
-                                      key: ValueKey(
-                                        'songs_${songProvider.songs.length}',
+                                child: _isSearching
+                                    ? _filteredSongs.isEmpty
+                                          ? const Center(
+                                              child: Text(
+                                                'No matching songs found',
+                                              ),
+                                            )
+                                          : SongListWidget(
+                                              key: const ValueKey(
+                                                'filtered_songs',
+                                              ),
+                                              songs: _filteredSongs,
+                                              onSongSelected: _playSong,
+                                              fadeAnimation: _fadeAnimation,
+                                              currentSong: _currentSong,
+                                            )
+                                    : Consumer<SongProvider>(
+                                        builder: (context, songProvider, _) {
+                                          return SongListWidget(
+                                            key: ValueKey(
+                                              'songs_${songProvider.songs.length}',
+                                            ),
+                                            songs: songProvider.songs,
+                                            onSongSelected: _playSong,
+                                            fadeAnimation: _fadeAnimation,
+                                            currentSong: _currentSong,
+                                          );
+                                        },
                                       ),
-                                      songs: _isSearching
-                                          ? _filteredSongs
-                                          : songProvider.songs,
-                                      onSongSelected: _playSong,
-                                      fadeAnimation: _fadeAnimation,
-                                      currentSong: _currentSong,
-                                    );
-                                  },
-                                ),
                               ),
+                              SizedBox(height: 70),
                             ],
                           ),
                     // Recently Played Tab

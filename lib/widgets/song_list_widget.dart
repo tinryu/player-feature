@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../models/song.dart';
@@ -24,63 +25,107 @@ class SongListWidget extends StatefulWidget {
 }
 
 class _SongListWidgetState extends State<SongListWidget> {
-  final ScrollController _scrollController = ScrollController();
-
-  final int _batchSize = 100;
+  late final ScrollController _scrollController;
+  final int _batchSize = 10;
   int _displayCount = 0;
   bool _isLoadingMore = false;
   late List<Song> _currentSongs;
+  bool _hasMoreItems = true;
 
   @override
   void initState() {
     super.initState();
-    _currentSongs = widget.songs;
-    _updateDisplayCount();
-    _scrollController.addListener(_onScroll);
+    _currentSongs = List.from(widget.songs);
+    _scrollController = ScrollController()..addListener(_onScroll);
+    _loadInitialItems();
+  }
+
+  void _loadInitialItems() {
+    final initialCount = math.min(_batchSize, _currentSongs.length);
+    setState(() {
+      _displayCount = initialCount;
+      _hasMoreItems = initialCount < _currentSongs.length;
+    });
   }
 
   @override
   void didUpdateWidget(SongListWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.songs != _currentSongs) {
-      _currentSongs = widget.songs;
+
+    // Only update state if the songs list actually changed
+    if (oldWidget.songs != widget.songs) {
+      _currentSongs = List.from(widget.songs);
       _updateDisplayCount();
+      _hasMoreItems = _displayCount < _currentSongs.length;
     }
+
+    // When only currentSong changes, the widget will rebuild automatically
+    // without calling setState, preventing interference with scroll events
   }
 
   void _updateDisplayCount() {
     setState(() {
-      _displayCount = _batchSize < _currentSongs.length
-          ? _batchSize
-          : _currentSongs.length;
+      _displayCount = math.min(_batchSize, _currentSongs.length);
+      _hasMoreItems = _displayCount < _currentSongs.length;
     });
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _onScroll() async {
-    if (_isLoadingMore) return;
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent * 0.8) {
-      if (_displayCount < _currentSongs.length) {
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    final threshold = 0.8 * maxScroll; // Load more when 80% scrolled
+
+    // Debug: Check if scroll is working
+    // if (maxScroll > 0 && currentScroll > 0) {
+    //   debugPrint(
+    //     'Scrolling: ${currentScroll.toStringAsFixed(0)}/${maxScroll.toStringAsFixed(0)} (${(currentScroll / maxScroll * 100).toStringAsFixed(0)}%) - hasMore=$_hasMoreItems, isLoading=$_isLoadingMore, display=$_displayCount/${_currentSongs.length}',
+    //   );
+    // }
+
+    if (!_isLoadingMore && _hasMoreItems && currentScroll >= threshold) {
+      debugPrint('Loading more items...');
+      _loadMoreItems();
+    }
+  }
+
+  Future<void> _loadMoreItems() async {
+    if (_isLoadingMore || !_hasMoreItems) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      // Small delay to allow UI to update
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      if (!mounted) return;
+
+      final newDisplayCount = _displayCount + _batchSize;
+      final hasMore = newDisplayCount < _currentSongs.length;
+
+      if (mounted) {
         setState(() {
-          _isLoadingMore = true;
+          _displayCount = hasMore ? newDisplayCount : _currentSongs.length;
+          _hasMoreItems = hasMore;
         });
-
-        // Simulate loading delay (you can remove this in production)
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        if (!mounted) return;
-
+      }
+    } catch (e) {
+      debugPrint('Error loading more items: $e');
+    } finally {
+      if (mounted) {
         setState(() {
-          _displayCount = (_displayCount + _batchSize).clamp(
-            0,
-            _currentSongs.length,
-          );
           _isLoadingMore = false;
         });
       }
@@ -92,32 +137,73 @@ class _SongListWidgetState extends State<SongListWidget> {
     if (widget.songs.isEmpty) {
       return const Center(child: Text('No songs found'));
     }
+
     return FadeTransition(
       opacity: widget.fadeAnimation,
       child: ListView.builder(
         controller: _scrollController,
-        itemCount: _displayCount + 1, // +1 for loading indicator
+        itemCount: _displayCount + (_hasMoreItems ? 1 : 0),
+        addAutomaticKeepAlives: true,
+        addRepaintBoundaries: true,
+        cacheExtent: 500, // Cache items ahead for smoother scrolling
         itemBuilder: (context, index) {
-          if (index >= _displayCount && _isLoadingMore) {
-            return _buildLoadingIndicator();
+          // Ensure we don't go out of bounds
+          if (index >= _currentSongs.length) {
+            return const SizedBox.shrink();
           }
 
-          if (index >= _currentSongs.length && !_isLoadingMore) {
-            return const SizedBox.shrink();
+          if (index >= _displayCount && _hasMoreItems) {
+            return _buildLoadingIndicator();
           }
 
           final song = _currentSongs[index];
           final bool isCurrentSong = widget.currentSong?.path == song.path;
 
-          return _buildSongItem(song, isCurrentSong);
+          // Use a key to help Flutter identify and reuse widgets efficiently
+          return SongListItem(
+            key: ValueKey(song.path),
+            song: song,
+            isCurrentSong: isCurrentSong,
+            onTap: () => widget.onSongSelected(song),
+          );
         },
       ),
     );
   }
 
-  Widget _buildSongItem(Song song, bool isCurrentSong) {
+  Widget _buildLoadingIndicator() {
+    return _hasMoreItems
+        ? const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+  }
+}
+
+// Separate widget to prevent rebuilds from affecting scroll performance
+class SongListItem extends StatelessWidget {
+  final Song song;
+  final bool isCurrentSong;
+  final VoidCallback onTap;
+
+  const SongListItem({
+    super.key,
+    required this.song,
+    required this.isCurrentSong,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return ListTile(
-      leading: _buildSongThumbnail(song, isCurrentSong),
+      leading: _buildSongThumbnail(),
       title: Text(
         Helper.getSongName(song.title),
         style: TextStyle(
@@ -128,11 +214,11 @@ class _SongListWidgetState extends State<SongListWidget> {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-      onTap: () => widget.onSongSelected(song),
+      onTap: onTap,
     );
   }
 
-  Widget _buildSongThumbnail(Song song, bool isCurrentSong) {
+  Widget _buildSongThumbnail() {
     return song.albumArt != null
         ? ClipRRect(
             borderRadius: BorderRadius.circular(4),
@@ -141,14 +227,13 @@ class _SongListWidgetState extends State<SongListWidget> {
               width: 50,
               height: 50,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  _buildDefaultThumbnail(isCurrentSong),
+              errorBuilder: (_, __, ___) => _buildDefaultThumbnail(),
             ),
           )
-        : _buildDefaultThumbnail(isCurrentSong);
+        : _buildDefaultThumbnail();
   }
 
-  Widget _buildDefaultThumbnail(bool isCurrentSong) {
+  Widget _buildDefaultThumbnail() {
     return SizedBox(
       width: 24,
       height: 24,
@@ -160,25 +245,6 @@ class _SongListWidgetState extends State<SongListWidget> {
               child: Icon(Icons.graphic_eq, color: Colors.redAccent),
             )
           : const Icon(Icons.music_note),
-    );
-  }
-
-  Widget _buildLoadingIndicator() {
-    if (_displayCount >= _currentSongs.length) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Center(
-        child: _isLoadingMore
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const SizedBox.shrink(),
-      ),
     );
   }
 }

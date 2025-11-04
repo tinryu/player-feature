@@ -41,7 +41,7 @@ class SongProvider with ChangeNotifier {
 
     try {
       // Get songs from the playlist in AudioProvider
-      _songs = List<Song>.from(_audioProvider.playlist);
+      _songs = List<Song>.from(_audioProvider.playList);
       _error = null;
 
       _recentlyPlayed = [];
