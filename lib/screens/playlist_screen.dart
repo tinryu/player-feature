@@ -197,9 +197,9 @@ class PlaylistScreenState extends State<PlaylistScreen>
 
   void _onAudioChange() {
     if (!mounted) return;
-    
+
     final newSong = _audioProvider.currentSong;
-    
+
     // Only call setState if the current song actually changed
     // Don't rebuild for play/pause state changes
     if (_currentSong?.path != newSong?.path) {
@@ -409,10 +409,30 @@ class PlaylistScreenState extends State<PlaylistScreen>
                   indicatorSize: TabBarIndicatorSize.tab,
 
                   dividerColor: Colors.grey.withValues(alpha: 0.2),
-                  tabs: const [
+                  tabs: [
                     Tab(icon: Icon(Icons.folder_rounded)),
-                    Tab(icon: Icon(Icons.queue_music_rounded)),
-                    Tab(icon: Icon(Icons.recent_actors_rounded)),
+                    Tab(
+                      child: songs.isNotEmpty
+                          ? Badge(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimary,
+                              padding: EdgeInsets.all(5),
+                              alignment: Alignment.topRight,
+                              offset: const Offset(12, -5),
+                              label: Text(
+                                '${songs.length}',
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                ),
+                              ),
+                              child: Icon(Icons.music_note_rounded),
+                            )
+                          : Icon(Icons.music_note_rounded),
+                    ),
+                    Tab(icon: Icon(Icons.graphic_eq_rounded)),
                   ],
                 ),
               ),
@@ -601,7 +621,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
-                                  vertical: 0,
                                 ),
                                 child: Container(
                                   decoration: BoxDecoration(
@@ -624,9 +643,9 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                           onChanged: (value) =>
                                               _filterSongs(value, context),
                                           decoration: InputDecoration(
-                                            hintText: 'Search songs...',
+                                            hintText: 'Filter songs',
                                             prefixIcon: const Icon(
-                                              Icons.search,
+                                              Icons.filter_alt,
                                             ),
                                             suffixIcon: _isSearching
                                                 ? IconButton(
@@ -666,15 +685,6 @@ class PlaylistScreenState extends State<PlaylistScreen>
                                         padding: EdgeInsets.zero,
                                         menuPadding: EdgeInsets.all(5),
                                         itemBuilder: (context) => [
-                                          PopupMenuItem(
-                                            value: 'playlist_count',
-                                            height:
-                                                40, // Fixed height for consistent item size
-                                            child: Text(
-                                              '${songs.length} songs',
-                                            ),
-                                          ),
-                                          PopupMenuDivider(),
                                           PopupMenuItem(
                                             value: 'clear_cache',
                                             height:
